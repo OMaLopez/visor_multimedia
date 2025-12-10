@@ -1,0 +1,11 @@
+README.md
+pyproject.toml
+src/visor/__init__.py
+src/visor/app.py
+src/visor/main.py
+src/visor_multimedia.egg-info/PKG-INFO
+src/visor_multimedia.egg-info/SOURCES.txt
+src/visor_multimedia.egg-info/dependency_links.txt
+src/visor_multimedia.egg-info/entry_points.txt
+src/visor_multimedia.egg-info/requires.txt
+src/visor_multimedia.egg-info/top_level.txt

@@ -9,3 +9,11 @@ dependencies = [
     "pyside6>=6.10.1",
     "watchdog>=6.0.0",
 ]
+[project.scripts]
+visor = "visor.main:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
