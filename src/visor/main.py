@@ -1,5 +1,13 @@
+from .ui.app import VisorApp
+import sys
+
+
 def main():
-    print("Visor Multimedia — Entrada correcta desde UV")
+    app = VisorApp(sys.argv)
+    return app.run()
+
+
+
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())
