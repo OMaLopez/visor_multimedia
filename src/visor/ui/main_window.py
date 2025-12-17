@@ -1,5 +1,5 @@
-from PySide6.QtWidgets import QMainWindow, QWidget, QLabel, QVBoxLayout
-
+from PySide6.QtWidgets import QMainWindow
+from .central_widget import CentralWidget
 
 class MainWindow(QMainWindow):
 
@@ -9,7 +9,5 @@ class MainWindow(QMainWindow):
         self.resize(800, 600)
 
 
-        central = QWidget()
-        layout = QVBoxLayout(central)
-        layout.addWidget(QLabel("Ventana base del visor multimedia"))
+        central = CentralWidget()
         self.setCentralWidget(central)
