@@ -11,3 +11,4 @@ class MainWindow(QMainWindow):
 
         central = CentralWidget()
         self.setCentralWidget(central)
+        

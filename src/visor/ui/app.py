@@ -17,6 +17,6 @@ class VisorApp(QApplication):
 
 
 
-    if __name__ == "__main__":
-        app = VisorApp(sys.argv)
-        sys.exit(app.run())
+if __name__ == "__main__":
+    app = VisorApp(sys.argv)
+    sys.exit(app.run())
