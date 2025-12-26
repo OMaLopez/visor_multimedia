@@ -20,3 +20,4 @@ class CentralWidget(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(splitter)
         self.setLayout(layout)
+        
