@@ -2,12 +2,12 @@ from pathlib import Path
 
 from PySide6.QtWidgets import (
     QWidget, QLabel, QPushButton, QSlider,
-    QVBoxLayout, QHBoxLayout, QStackedLayout
+    QVBoxLayout, QHBoxLayout, QStackedLayout, QMessageBox
 )
 from PySide6.QtMultimedia import QMediaPlayer, QAudioOutput
 from PySide6.QtMultimediaWidgets import QVideoWidget
-from PySide6.QtCore import Qt, QUrl, QTimer
-from PySide6.QtGui import QPixmap, QKeyEvent
+from PySide6.QtCore import Qt, QUrl, QTimer, QSize
+from PySide6.QtGui import QPixmap, QKeyEvent, QImageReader
 
 
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
@@ -178,15 +178,48 @@ class ViewerContainer(QWidget):
     # =================================================
 
     def _show_image(self, path: str):
-        """Display an image file"""
+        """Display an image file with smart loading"""
         # Stop player and destroy video widget
         self.player.stop()
         self._destroy_video_widget()
         
-        pixmap = QPixmap(path)
-        if pixmap.isNull():
+        # Usar QImageReader para control avanzado
+        reader = QImageReader(path)
+        
+        if not reader.canRead():
+            QMessageBox.warning(self, "Error", f"No se puede leer la imagen:\n{path}")
             return
-
+        
+        # Obtener tamaño original
+        original_size = reader.size()
+        
+        # Límite razonable: 8K (7680x4320)
+        max_dimension = 7680
+        
+        # Si la imagen es muy grande, escalarla al cargar
+        if original_size.width() > max_dimension or original_size.height() > max_dimension:
+            # Calcular nuevo tamaño manteniendo aspecto
+            if original_size.width() > original_size.height():
+                scale_factor = max_dimension / original_size.width()
+            else:
+                scale_factor = max_dimension / original_size.height()
+            
+            new_width = int(original_size.width() * scale_factor)
+            new_height = int(original_size.height() * scale_factor)
+            
+            reader.setScaledSize(QSize(new_width, new_height))
+            print(f"Imagen redimensionada de {original_size.width()}x{original_size.height()} a {new_width}x{new_height}")
+        
+        # Leer imagen
+        image = reader.read()
+        
+        if image.isNull():
+            error = reader.errorString()
+            QMessageBox.warning(self, "Error", f"Error al cargar imagen:\n{error}")
+            return
+        
+        pixmap = QPixmap.fromImage(image)
+        
         self._current_pixmap = pixmap
         self._update_image()
         self.stack.setCurrentIndex(0)
