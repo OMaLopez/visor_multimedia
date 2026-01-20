@@ -1,0 +1,172 @@
+from PySide6.QtWidgets import (
+    QWidget, QVBoxLayout, QHBoxLayout, QLabel,
+    QSpinBox, QPushButton, QGroupBox, QFrame
+)
+from PySide6.QtCore import Qt, Signal
+
+
+class ConfigWidget(QWidget):
+    """Widget para configurar cooldowns de navegación"""
+    
+    # Señales
+    configChanged = Signal(int, int, int)  # (positive, neutral, negative)
+    
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        
+        self._setup_ui()
+        
+    def _setup_ui(self):
+        """Configurar interfaz"""
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setSpacing(10)
+        
+        # Título
+        title = QLabel("⚙️ Configuración de Repetición")
+        title.setStyleSheet("font-size: 14px; font-weight: bold;")
+        layout.addWidget(title)
+        
+        # Descripción
+        desc = QLabel(
+            "Controla cada cuántos archivos se pueden repetir según su voto.\n"
+            "0 = nunca se repite"
+        )
+        desc.setStyleSheet("color: gray; font-size: 11px;")
+        desc.setWordWrap(True)
+        layout.addWidget(desc)
+        
+        # Separador
+        line = QFrame()
+        line.setFrameShape(QFrame.HLine)
+        line.setFrameShadow(QFrame.Sunken)
+        layout.addWidget(line)
+        
+        # --- Positivos ---
+        positive_group = QGroupBox("👍 Archivos Positivos")
+        positive_layout = QHBoxLayout(positive_group)
+        
+        positive_layout.addWidget(QLabel("Repetir después de:"))
+        
+        self.positive_spin = QSpinBox()
+        self.positive_spin.setRange(0, 200)
+        self.positive_spin.setValue(5)
+        self.positive_spin.setSuffix(" archivos")
+        self.positive_spin.valueChanged.connect(self._on_config_changed)
+        positive_layout.addWidget(self.positive_spin)
+        
+        layout.addWidget(positive_group)
+        
+        # --- Neutrales ---
+        neutral_group = QGroupBox("⚪ Archivos Neutrales")
+        neutral_layout = QHBoxLayout(neutral_group)
+        
+        neutral_layout.addWidget(QLabel("Repetir después de:"))
+        
+        self.neutral_spin = QSpinBox()
+        self.neutral_spin.setRange(0, 200)
+        self.neutral_spin.setValue(20)
+        self.neutral_spin.setSuffix(" archivos")
+        self.neutral_spin.valueChanged.connect(self._on_config_changed)
+        neutral_layout.addWidget(self.neutral_spin)
+        
+        layout.addWidget(neutral_group)
+        
+        # --- Negativos ---
+        negative_group = QGroupBox("👎 Archivos Negativos")
+        negative_layout = QHBoxLayout(negative_group)
+        
+        negative_layout.addWidget(QLabel("Repetir después de:"))
+        
+        self.negative_spin = QSpinBox()
+        self.negative_spin.setRange(0, 200)
+        self.negative_spin.setValue(0)
+        self.negative_spin.setSuffix(" archivos")
+        self.negative_spin.setSpecialValueText("Nunca")
+        self.negative_spin.valueChanged.connect(self._on_config_changed)
+        negative_layout.addWidget(self.negative_spin)
+        
+        layout.addWidget(negative_group)
+        
+        # Separador
+        line2 = QFrame()
+        line2.setFrameShape(QFrame.HLine)
+        line2.setFrameShadow(QFrame.Sunken)
+        layout.addWidget(line2)
+        
+        # Botones de preset
+        preset_label = QLabel("Configuraciones rápidas:")
+        preset_label.setStyleSheet("font-weight: bold;")
+        layout.addWidget(preset_label)
+        
+        preset_layout = QVBoxLayout()
+        preset_layout.setSpacing(5)
+        
+        # Preset: Balanceado
+        btn_balanced = QPushButton("⚖️ Balanceado")
+        btn_balanced.setToolTip("Positivos: 5, Neutrales: 20, Negativos: 0")
+        btn_balanced.clicked.connect(lambda: self.set_config(5, 20, 0))
+        preset_layout.addWidget(btn_balanced)
+        
+        # Preset: Favorece positivos
+        btn_aggressive = QPushButton("🔥 Favorece Positivos")
+        btn_aggressive.setToolTip("Positivos: 3, Neutrales: 30, Negativos: 0")
+        btn_aggressive.clicked.connect(lambda: self.set_config(3, 30, 0))
+        preset_layout.addWidget(btn_aggressive)
+        
+        # Preset: Segunda oportunidad
+        btn_second = QPushButton("🔄 Segunda Oportunidad")
+        btn_second.setToolTip("Positivos: 5, Neutrales: 20, Negativos: 50")
+        btn_second.clicked.connect(lambda: self.set_config(5, 20, 50))
+        preset_layout.addWidget(btn_second)
+        
+        # Preset: Aleatorio
+        btn_random = QPushButton("🎲 Casi Aleatorio")
+        btn_random.setToolTip("Positivos: 10, Neutrales: 10, Negativos: 10")
+        btn_random.clicked.connect(lambda: self.set_config(10, 10, 10))
+        preset_layout.addWidget(btn_random)
+        
+        layout.addLayout(preset_layout)
+        
+        # Espaciador
+        layout.addStretch()
+        
+        # Botón de aplicar
+        apply_btn = QPushButton("✓ Aplicar Configuración")
+        apply_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #4CAF50;
+                color: white;
+                font-weight: bold;
+                padding: 10px;
+                border-radius: 5px;
+            }
+            QPushButton:hover {
+                background-color: #45a049;
+            }
+        """)
+        apply_btn.clicked.connect(self._on_config_changed)
+        layout.addWidget(apply_btn)
+    
+    def _on_config_changed(self):
+        """Emitir señal cuando cambia la configuración"""
+        self.configChanged.emit(
+            self.positive_spin.value(),
+            self.neutral_spin.value(),
+            self.negative_spin.value()
+        )
+    
+    def set_config(self, positive: int, neutral: int, negative: int):
+        """Establecer configuración"""
+        self.positive_spin.setValue(positive)
+        self.neutral_spin.setValue(neutral)
+        self.negative_spin.setValue(negative)
+        self._on_config_changed()
+    
+    def get_config(self) -> tuple:
+        """Obtener configuración actual"""
+        return (
+            self.positive_spin.value(),
+            self.neutral_spin.value(),
+            self.negative_spin.value()
+        )

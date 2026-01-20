@@ -6,15 +6,20 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtMultimedia import QMediaPlayer, QAudioOutput
 from PySide6.QtMultimediaWidgets import QVideoWidget
-from PySide6.QtCore import Qt, QUrl, QTimer, QSize
+from PySide6.QtCore import Qt, QUrl, QTimer, QSize, Signal
 from PySide6.QtGui import QPixmap, QKeyEvent, QImageReader
 
 
-IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
+IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp", ".webp", ".gif"}
 VIDEO_EXTENSIONS = {".mp4", ".mkv", ".avi", ".webm", ".mov"}
 
 
 class ViewerContainer(QWidget):
+    # Señales
+    voteChanged = Signal(str, int)  # (file_path, vote: 1/-1/0)
+    requestNext = Signal()  # Solicitar siguiente archivo aleatorio
+    requestPrevious = Signal()  # Solicitar archivo anterior
+    
     def __init__(self, parent=None):
         super().__init__(parent)
 
@@ -22,12 +27,11 @@ class ViewerContainer(QWidget):
         self._current_pixmap = None
         self._seeking = False
         self._video_widget = None
-        self._first_video_load = True  # Track first load
+        self._current_file = None  # Archivo actualmente mostrado
 
         # ---------------- Player ----------------
         self.player = QMediaPlayer(self)
         self.audio = QAudioOutput(self)
-        self.audio.setVolume(0.1)  # 10% volume
         self.player.setAudioOutput(self.audio)
 
         # Connect player signals (persistent)
@@ -47,6 +51,10 @@ class ViewerContainer(QWidget):
         image_layout = QVBoxLayout(image_page)
         image_layout.setContentsMargins(0, 0, 0, 0)
         image_layout.addWidget(self.image_label)
+        
+        # Voting controls overlay for images
+        self._create_voting_controls()
+        image_layout.addWidget(self.voting_controls)
 
         # ---------------- Video page ----------------
         self.video_page = QWidget()
@@ -62,6 +70,93 @@ class ViewerContainer(QWidget):
         self.stack.setCurrentIndex(0)
 
         self.setFocusPolicy(Qt.StrongFocus)
+
+    # =================================================
+    # Voting controls
+    # =================================================
+    
+    def _create_voting_controls(self):
+        """Create voting buttons"""
+        self.voting_controls = QWidget()
+        voting_layout = QHBoxLayout(self.voting_controls)
+        voting_layout.setContentsMargins(10, 5, 10, 5)
+        
+        # Positive vote button
+        self.vote_positive_btn = QPushButton("👍 Positivo")
+        self.vote_positive_btn.setFixedWidth(120)
+        self.vote_positive_btn.clicked.connect(lambda: self._vote(1))
+        
+        # Clear vote button
+        self.vote_clear_btn = QPushButton("⚪ Neutral")
+        self.vote_clear_btn.setFixedWidth(120)
+        self.vote_clear_btn.clicked.connect(lambda: self._vote(0))
+        
+        # Negative vote button
+        self.vote_negative_btn = QPushButton("👎 Negativo")
+        self.vote_negative_btn.setFixedWidth(120)
+        self.vote_negative_btn.clicked.connect(lambda: self._vote(-1))
+        
+        # Navigation buttons
+        self.prev_btn = QPushButton("← Anterior")
+        self.prev_btn.clicked.connect(lambda: self.requestPrevious.emit())
+        
+        self.next_btn = QPushButton("Siguiente →")
+        self.next_btn.clicked.connect(lambda: self.requestNext.emit())
+        
+        # Layout
+        voting_layout.addWidget(self.prev_btn)
+        voting_layout.addStretch()
+        voting_layout.addWidget(self.vote_negative_btn)
+        voting_layout.addWidget(self.vote_clear_btn)
+        voting_layout.addWidget(self.vote_positive_btn)
+        voting_layout.addStretch()
+        voting_layout.addWidget(self.next_btn)
+        
+        self.voting_controls.setStyleSheet("""
+            QWidget {
+                background-color: rgba(43, 43, 43, 230);
+            }
+            QPushButton {
+                background-color: #3d3d3d;
+                color: white;
+                border: none;
+                padding: 8px;
+                font-size: 13px;
+                border-radius: 4px;
+            }
+            QPushButton:hover {
+                background-color: #4d4d4d;
+            }
+            QPushButton:pressed {
+                background-color: #2d2d2d;
+            }
+        """)
+    
+    def _vote(self, vote_type: int):
+        """Handle voting"""
+        if self._current_file:
+            self.voteChanged.emit(self._current_file, vote_type)
+            self._update_vote_buttons(vote_type)
+    
+    def _update_vote_buttons(self, current_vote: int):
+        """Update button styles based on current vote"""
+        # Reset all
+        self.vote_positive_btn.setStyleSheet("")
+        self.vote_clear_btn.setStyleSheet("")
+        self.vote_negative_btn.setStyleSheet("")
+        
+        # Highlight current
+        highlight = "background-color: #5d5d5d; font-weight: bold;"
+        if current_vote == 1:
+            self.vote_positive_btn.setStyleSheet(highlight)
+        elif current_vote == -1:
+            self.vote_negative_btn.setStyleSheet(highlight)
+        else:
+            self.vote_clear_btn.setStyleSheet(highlight)
+    
+    def set_current_vote(self, vote: int):
+        """Set current vote from external source"""
+        self._update_vote_buttons(vote)
 
     # =================================================
     # Video widgets - Create/Destroy
@@ -84,6 +179,7 @@ class ViewerContainer(QWidget):
         # Volume setup: 0-100 range, default 10
         self.volume_slider.setRange(0, 100)
         self.volume_slider.setValue(10)
+        self.audio.setVolume(0.1)  # Set initial volume (10%)
 
         # Connect signals
         self.play_button.clicked.connect(self.toggle_play)
@@ -136,14 +232,8 @@ class ViewerContainer(QWidget):
         # Insert at top of layout (before controls)
         self.video_layout.insertWidget(0, self._video_widget, 1)
         
-        # Connect to player - with delay on first load
-        if self._first_video_load:
-            # First time: delay connection to let widget initialize
-            QTimer.singleShot(100, lambda: self.player.setVideoOutput(self._video_widget))
-            self._first_video_load = False
-        else:
-            # Subsequent loads: immediate connection
-            self.player.setVideoOutput(self._video_widget)
+        # Connect to player
+        self.player.setVideoOutput(self._video_widget)
 
     def _destroy_video_widget(self):
         """Destroy video widget to prevent overlay issues"""
@@ -166,6 +256,7 @@ class ViewerContainer(QWidget):
 
     def show_file(self, path: str):
         """Display image or video file"""
+        self._current_file = path
         ext = Path(path).suffix.lower()
 
         if ext in IMAGE_EXTENSIONS:
@@ -227,8 +318,10 @@ class ViewerContainer(QWidget):
     def resizeEvent(self, event):
         """Handle window resize for image scaling"""
         super().resizeEvent(event)
+        
+        # Defer image update to avoid Wayland protocol errors
         if self.stack.currentIndex() == 0 and self._current_pixmap:
-            self._update_image()
+            QTimer.singleShot(10, self._update_image)
 
     def _update_image(self):
         """Update image scaling to fit current widget size"""
@@ -260,24 +353,37 @@ class ViewerContainer(QWidget):
 
     def keyPressEvent(self, event: QKeyEvent):
         """Handle keyboard shortcuts"""
-        if event.key() == Qt.Key_Space and self.stack.currentIndex() == 1:
+        # NAVEGACIÓN (funcionan siempre)
+        if event.key() == Qt.Key_Right:
+            # Siguiente archivo
+            self.requestNext.emit()
+            event.accept()
+        elif event.key() == Qt.Key_Left:
+            # Archivo anterior
+            self.requestPrevious.emit()
+            event.accept()
+        
+        # VOTACIÓN (funcionan siempre)
+        elif event.key() == Qt.Key_Up:
+            # Upvote
+            self._vote(1)
+            event.accept()
+        elif event.key() == Qt.Key_Down:
+            # Downvote
+            self._vote(-1)
+            event.accept()
+        
+        # CONTROLES DE VIDEO (solo cuando hay video)
+        elif event.key() == Qt.Key_Space and self.stack.currentIndex() == 1:
             self.toggle_play()
             event.accept()
-        elif event.key() == Qt.Key_Left and self.stack.currentIndex() == 1:
-            # Seek backward 5 seconds
-            self.player.setPosition(max(0, self.player.position() - 5000))
-            event.accept()
-        elif event.key() == Qt.Key_Right and self.stack.currentIndex() == 1:
-            # Seek forward 5 seconds
-            self.player.setPosition(min(self._duration, self.player.position() + 5000))
-            event.accept()
-        elif event.key() == Qt.Key_Up and self.stack.currentIndex() == 1:
+        elif event.key() == Qt.Key_PageUp and self.stack.currentIndex() == 1:
             # Volume up
-            self.volume_slider.setValue(min(100, self.volume_slider.value() + 5))
+            self.volume_slider.setValue(min(100, self.volume_slider.value() + 10))
             event.accept()
-        elif event.key() == Qt.Key_Down and self.stack.currentIndex() == 1:
+        elif event.key() == Qt.Key_PageDown and self.stack.currentIndex() == 1:
             # Volume down
-            self.volume_slider.setValue(max(0, self.volume_slider.value() - 5))
+            self.volume_slider.setValue(max(0, self.volume_slider.value() - 10))
             event.accept()
         else:
             super().keyPressEvent(event)

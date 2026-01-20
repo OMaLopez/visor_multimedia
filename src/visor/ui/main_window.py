@@ -1,14 +1,246 @@
-from PySide6.QtWidgets import QMainWindow
-from .central_widget import CentralWidget
+from PySide6.QtWidgets import (
+    QMainWindow, QWidget, QSplitter, QVBoxLayout,
+    QTabWidget, QMessageBox
+)
+from PySide6.QtCore import Qt
+import json
+from pathlib import Path
+
+from .viewer_container import ViewerContainer
+from .sidebar_widget import SidebarWidget
+from .config_widget import ConfigWidget
+from ..services.navigation_system import NavigationSystem
+
 
 class MainWindow(QMainWindow):
-
+    """Ventana principal con sistema de navegación integrado"""
+    
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Visor Multimedia")
-        self.resize(800, 600)
-
-
-        central = CentralWidget()
+        
+        self.setWindowTitle("Visor Multimedia con Navegación Inteligente")
+        self.setGeometry(100, 100, 1400, 800)
+        
+        # Sistema de navegación
+        self.nav_system = None
+        self._loaded_settings = None
+        
+        self._setup_ui()
+        self._connect_signals()
+        
+        # Intentar cargar configuración guardada
+        self._load_settings()
+    
+    def _setup_ui(self):
+        """Configurar interfaz"""
+        central = QWidget()
         self.setCentralWidget(central)
         
+        main_layout = QVBoxLayout(central)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        
+        # Splitter principal
+        main_splitter = QSplitter(Qt.Horizontal)
+        
+        # Sidebar con tabs
+        sidebar_tabs = QTabWidget()
+        sidebar_tabs.setMaximumWidth(400)
+        
+        self.sidebar = SidebarWidget()
+        sidebar_tabs.addTab(self.sidebar, "📁 Archivos")
+        
+        self.config_widget = ConfigWidget()
+        sidebar_tabs.addTab(self.config_widget, "⚙️ Configuración")
+        
+        # Visor
+        self.viewer = ViewerContainer()
+        
+        # Añadir al splitter
+        main_splitter.addWidget(sidebar_tabs)
+        main_splitter.addWidget(self.viewer)
+        main_splitter.setSizes([300, 1100])
+        
+        main_layout.addWidget(main_splitter)
+        
+        self.statusBar().showMessage("Listo - Añade directorios para comenzar")
+    
+    def _connect_signals(self):
+        """Conectar señales"""
+        self.sidebar.fileSelected.connect(self._on_file_selected_from_list)
+        self.viewer.requestNext.connect(self._next_random)
+        self.viewer.requestPrevious.connect(self._go_back)
+        self.viewer.voteChanged.connect(self._on_vote_changed)
+        self.config_widget.configChanged.connect(self._on_config_changed)
+    
+    def _on_file_selected_from_list(self, file_path: str):
+        """Archivo seleccionado desde la lista"""
+        if self.nav_system is None:
+            files = self.sidebar.get_all_files()
+            if not files:
+                return
+            
+            pos, neu, neg = self.config_widget.get_config()
+            self.nav_system = NavigationSystem(
+                files,
+                positive_cooldown=pos,
+                neutral_cooldown=neu,
+                negative_cooldown=neg
+            )
+            
+            # Cargar votos guardados si existen
+            if self._loaded_settings and 'votes' in self._loaded_settings:
+                self.nav_system.import_data(self._loaded_settings)
+        
+        self.viewer.show_file(file_path)
+        
+        if self.nav_system:
+            vote = self.nav_system.get_vote(file_path)
+            self.viewer.set_current_vote(vote)
+        
+        self._update_status()
+    
+    def _next_random(self):
+        """Siguiente archivo aleatorio"""
+        if not self.nav_system:
+            files = self.sidebar.get_all_files()
+            if not files:
+                QMessageBox.warning(self, "Sin archivos", "Añade directorios primero")
+                return
+            
+            pos, neu, neg = self.config_widget.get_config()
+            self.nav_system = NavigationSystem(
+                files,
+                positive_cooldown=pos,
+                neutral_cooldown=neu,
+                negative_cooldown=neg
+            )
+            
+            if self._loaded_settings and 'votes' in self._loaded_settings:
+                self.nav_system.import_data(self._loaded_settings)
+        
+        next_file = self.nav_system.next_random()
+        
+        if next_file:
+            self.viewer.show_file(next_file)
+            vote = self.nav_system.get_vote(next_file)
+            self.viewer.set_current_vote(vote)
+            self._update_status()
+        else:
+            QMessageBox.information(
+                self,
+                "Sin archivos disponibles",
+                "No hay archivos disponibles.\n\nAjusta la configuración de cooldowns."
+            )
+    
+    def _go_back(self):
+        """Volver al archivo anterior"""
+        if not self.nav_system:
+            return
+        
+        prev_file = self.nav_system.go_back()
+        
+        if prev_file:
+            self.viewer.show_file(prev_file)
+            vote = self.nav_system.get_vote(prev_file)
+            self.viewer.set_current_vote(vote)
+            self._update_status()
+    
+    def _on_vote_changed(self, file_path: str, vote: int):
+        """Manejar cambio de voto"""
+        if not self.nav_system:
+            return
+        
+        if vote == 1:
+            self.nav_system.vote_positive(file_path)
+        elif vote == -1:
+            self.nav_system.vote_negative(file_path)
+        else:
+            self.nav_system.clear_vote(file_path)
+        
+        self._update_status()
+        self._save_settings()
+    
+    def _on_config_changed(self, positive: int, neutral: int, negative: int):
+        """Aplicar nueva configuración"""
+        if self.nav_system:
+            self.nav_system.set_positive_cooldown(positive)
+            self.nav_system.set_neutral_cooldown(neutral)
+            self.nav_system.set_negative_cooldown(negative)
+            
+            self.statusBar().showMessage(
+                f"Configuración actualizada: 👍={positive}, ⚪={neutral}, 👎={negative}",
+                3000
+            )
+            self._save_settings()
+    
+    def _update_status(self):
+        """Actualizar barra de estado"""
+        if not self.nav_system:
+            return
+        
+        stats = self.nav_system.get_stats()
+        current = self.nav_system.get_current()
+        
+        if current:
+            file_name = Path(current).name
+            vote_symbol = self.nav_system.get_vote_symbol(current)
+            position = stats['history_position']
+            total = stats['history_length']
+            eligible = stats['eligible_now']
+            
+            self.statusBar().showMessage(
+                f"{vote_symbol} {file_name} | "
+                f"Posición: {position}/{total} | "
+                f"Disponibles: {eligible}/{stats['total_files']} | "
+                f"👍 {stats['positive_voted']} | "
+                f"⚪ {stats['neutral_voted']} | "
+                f"👎 {stats['negative_voted']}"
+            )
+    
+    def _save_settings(self):
+        """Guardar configuración y votos"""
+        if not self.nav_system:
+            return
+        
+        settings_path = Path.home() / ".visor_multimedia_settings.json"
+        
+        try:
+            data = self.nav_system.export_data()
+            with open(settings_path, 'w') as f:
+                json.dump(data, f, indent=2)
+        except Exception as e:
+            print(f"Error guardando configuración: {e}")
+    
+    def _load_settings(self):
+        """Cargar configuración guardada"""
+        settings_path = Path.home() / ".visor_multimedia_settings.json"
+        
+        if not settings_path.exists():
+            return
+        
+        try:
+            with open(settings_path, 'r') as f:
+                data = json.load(f)
+            
+            if 'positive_cooldown' in data:
+                self.config_widget.set_config(
+                    data.get('positive_cooldown', 5),
+                    data.get('neutral_cooldown', 20),
+                    data.get('negative_cooldown', 0)
+                )
+            
+            self._loaded_settings = data
+            
+        except Exception as e:
+            print(f"Error cargando configuración: {e}")
+    
+    def closeEvent(self, event):
+        """Guardar al cerrar"""
+        self._save_settings()
+        
+        if hasattr(self, 'sidebar'):
+            self.sidebar.cleanup()
+        if hasattr(self, 'viewer'):
+            self.viewer.cleanup()
+        
+        event.accept()
