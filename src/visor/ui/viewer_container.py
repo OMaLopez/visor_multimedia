@@ -76,87 +76,109 @@ class ViewerContainer(QWidget):
     # =================================================
     
     def _create_voting_controls(self):
-        """Create voting buttons"""
+        """Create voting status indicator"""
         self.voting_controls = QWidget()
         voting_layout = QHBoxLayout(self.voting_controls)
-        voting_layout.setContentsMargins(10, 5, 10, 5)
+        voting_layout.setContentsMargins(5, 3, 5, 3)
         
-        # Positive vote button
-        self.vote_positive_btn = QPushButton("👍 Positivo")
-        self.vote_positive_btn.setFixedWidth(120)
-        self.vote_positive_btn.clicked.connect(lambda: self._vote(1))
-        
-        # Clear vote button
-        self.vote_clear_btn = QPushButton("⚪ Neutral")
-        self.vote_clear_btn.setFixedWidth(120)
-        self.vote_clear_btn.clicked.connect(lambda: self._vote(0))
-        
-        # Negative vote button
-        self.vote_negative_btn = QPushButton("👎 Negativo")
-        self.vote_negative_btn.setFixedWidth(120)
-        self.vote_negative_btn.clicked.connect(lambda: self._vote(-1))
-        
-        # Navigation buttons
-        self.prev_btn = QPushButton("← Anterior")
-        self.prev_btn.clicked.connect(lambda: self.requestPrevious.emit())
-        
-        self.next_btn = QPushButton("Siguiente →")
-        self.next_btn.clicked.connect(lambda: self.requestNext.emit())
-        
-        # Layout
-        voting_layout.addWidget(self.prev_btn)
-        voting_layout.addStretch()
-        voting_layout.addWidget(self.vote_negative_btn)
-        voting_layout.addWidget(self.vote_clear_btn)
-        voting_layout.addWidget(self.vote_positive_btn)
-        voting_layout.addStretch()
-        voting_layout.addWidget(self.next_btn)
-        
-        self.voting_controls.setStyleSheet("""
-            QWidget {
-                background-color: rgba(43, 43, 43, 230);
-            }
-            QPushButton {
-                background-color: #3d3d3d;
+        self.vote_status_label = QLabel("⚪")
+        self.vote_status_label.setAlignment(Qt.AlignCenter)
+        self.vote_status_label.setStyleSheet("""
+            QLabel {
+                background-color: rgba(43, 43, 43, 180);
                 color: white;
-                border: none;
-                padding: 8px;
-                font-size: 13px;
-                border-radius: 4px;
-            }
-            QPushButton:hover {
-                background-color: #4d4d4d;
-            }
-            QPushButton:pressed {
-                background-color: #2d2d2d;
+                padding: 5px 15px;
+                font-size: 16px;
+                border-radius: 3px;
             }
         """)
+        
+        voting_layout.addStretch()
+        voting_layout.addWidget(self.vote_status_label)
+        voting_layout.addStretch()
+        
+        self.voting_controls.setStyleSheet("background-color: transparent;")
     
     def _vote(self, vote_type: int):
-        """Handle voting"""
-        if self._current_file:
-            self.voteChanged.emit(self._current_file, vote_type)
-            self._update_vote_buttons(vote_type)
-    
-    def _update_vote_buttons(self, current_vote: int):
-        """Update button styles based on current vote"""
-        # Reset all
-        self.vote_positive_btn.setStyleSheet("")
-        self.vote_clear_btn.setStyleSheet("")
-        self.vote_negative_btn.setStyleSheet("")
+        """Handle voting with one-directional progression"""
+        if not self._current_file:
+            return
         
-        # Highlight current
-        highlight = "background-color: #5d5d5d; font-weight: bold;"
-        if current_vote == 1:
-            self.vote_positive_btn.setStyleSheet(highlight)
-        elif current_vote == -1:
-            self.vote_negative_btn.setStyleSheet(highlight)
-        else:
-            self.vote_clear_btn.setStyleSheet(highlight)
+        current = self.get_current_vote()
+        
+        # Si es upvote (flecha arriba) - Solo avanza hacia positivo
+        if vote_type == 1:
+            if current == -1:  # Negativo → Neutral
+                new_vote = 0
+            elif current == 0:  # Neutral → Positivo
+                new_vote = 1
+            else:  # Ya es positivo, no hacer nada
+                return
+            
+            self.voteChanged.emit(self._current_file, new_vote)
+            self._update_vote_display(new_vote)
+        
+        # Si es downvote (flecha abajo) - Solo avanza hacia negativo
+        elif vote_type == -1:
+            if current == 1:  # Positivo → Neutral
+                new_vote = 0
+            elif current == 0:  # Neutral → Negativo
+                new_vote = -1
+            else:  # Ya es negativo, no hacer nada
+                return
+            
+            self.voteChanged.emit(self._current_file, new_vote)
+            self._update_vote_display(new_vote)
     
+    def get_current_vote(self):
+        """Get current vote from display"""
+        text = self.vote_status_label.text()
+        if "👍" in text:
+            return 1
+        elif "👎" in text:
+            return -1
+        else:
+            return 0
+    
+    def _update_vote_display(self, current_vote: int):
+        """Update vote status display"""
+        if current_vote == 1:
+            self.vote_status_label.setText("👍")
+            self.vote_status_label.setStyleSheet("""
+                QLabel {
+                    background-color: rgba(76, 175, 80, 180);
+                    color: white;
+                    padding: 5px 15px;
+                    font-size: 16px;
+                    border-radius: 3px;
+                }
+            """)
+        elif current_vote == -1:
+            self.vote_status_label.setText("👎")
+            self.vote_status_label.setStyleSheet("""
+                QLabel {
+                    background-color: rgba(244, 67, 54, 180);
+                    color: white;
+                    padding: 5px 15px;
+                    font-size: 16px;
+                    border-radius: 3px;
+                }
+            """)
+        else:
+            self.vote_status_label.setText("⚪")
+            self.vote_status_label.setStyleSheet("""
+                QLabel {
+                    background-color: rgba(43, 43, 43, 180);
+                    color: white;
+                    padding: 5px 15px;
+                    font-size: 16px;
+                    border-radius: 3px;
+                }
+            """)
+
     def set_current_vote(self, vote: int):
         """Set current vote from external source"""
-        self._update_vote_buttons(vote)
+        self._update_vote_display(vote)
 
     # =================================================
     # Video widgets - Create/Destroy
