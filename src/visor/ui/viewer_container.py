@@ -78,18 +78,20 @@ class ViewerContainer(QWidget):
     def _create_voting_controls(self):
         """Create voting status indicator"""
         self.voting_controls = QWidget()
+        self.voting_controls.setMaximumHeight(25)  # Contenedor muy pequeño
         voting_layout = QHBoxLayout(self.voting_controls)
-        voting_layout.setContentsMargins(5, 3, 5, 3)
+        voting_layout.setContentsMargins(3, 1, 3, 1)  # Márgenes mínimos
         
         self.vote_status_label = QLabel("⚪")
         self.vote_status_label.setAlignment(Qt.AlignCenter)
+        self.vote_status_label.setFixedHeight(20)  # Altura fija pequeña
         self.vote_status_label.setStyleSheet("""
             QLabel {
                 background-color: rgba(43, 43, 43, 180);
                 color: white;
-                padding: 5px 15px;
-                font-size: 16px;
-                border-radius: 3px;
+                padding: 2px 8px;
+                font-size: 12px;
+                border-radius: 2px;
             }
         """)
         
@@ -148,9 +150,9 @@ class ViewerContainer(QWidget):
                 QLabel {
                     background-color: rgba(76, 175, 80, 180);
                     color: white;
-                    padding: 5px 15px;
-                    font-size: 16px;
-                    border-radius: 3px;
+                    padding: 2px 8px;
+                    font-size: 12px;
+                    border-radius: 2px;
                 }
             """)
         elif current_vote == -1:
@@ -159,9 +161,9 @@ class ViewerContainer(QWidget):
                 QLabel {
                     background-color: rgba(244, 67, 54, 180);
                     color: white;
-                    padding: 5px 15px;
-                    font-size: 16px;
-                    border-radius: 3px;
+                    padding: 2px 8px;
+                    font-size: 12px;
+                    border-radius: 2px;
                 }
             """)
         else:
@@ -170,9 +172,9 @@ class ViewerContainer(QWidget):
                 QLabel {
                     background-color: rgba(43, 43, 43, 180);
                     color: white;
-                    padding: 5px 15px;
-                    font-size: 16px;
-                    border-radius: 3px;
+                    padding: 2px 8px;
+                    font-size: 12px;
+                    border-radius: 2px;
                 }
             """)
 
@@ -336,6 +338,8 @@ class ViewerContainer(QWidget):
         self._current_pixmap = pixmap
         self._update_image()
         self.stack.setCurrentIndex(0)
+        self.setFocus()
+        self.activateWindow()
 
     def resizeEvent(self, event):
         """Handle window resize for image scaling"""
@@ -368,6 +372,8 @@ class ViewerContainer(QWidget):
         self.stack.setCurrentIndex(1)
         self.player.setSource(QUrl.fromLocalFile(path))
         self.player.play()
+        self.setFocus()
+        self.activateWindow()
 
     # =================================================
     # Keyboard shortcuts
