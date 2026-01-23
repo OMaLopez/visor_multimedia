@@ -128,6 +128,73 @@ class ConfigWidget(QWidget):
         
         layout.addLayout(preset_layout)
         
+
+
+        # Separador
+        line3 = QFrame()
+        line3.setFrameShape(QFrame.HLine)
+        line3.setFrameShadow(QFrame.Sunken)
+        layout.addWidget(line3)
+
+        # Sección de gestión de votos
+        votes_label = QLabel("📊 Gestión de Votos")
+        votes_label.setStyleSheet("font-weight: bold; font-size: 13px;")
+        layout.addWidget(votes_label)
+
+        # Botón: Resetear positivos
+        reset_pos_btn = QPushButton("🗑️ Resetear Positivos")
+        reset_pos_btn.setToolTip("Todos los archivos votados positivamente pasan a neutral")
+        reset_pos_btn.clicked.connect(self._reset_positive)
+        reset_pos_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #4CAF50;
+                color: white;
+                padding: 8px;
+                border-radius: 4px;
+            }
+            QPushButton:hover {
+                background-color: #45a049;
+            }
+        """)
+        layout.addWidget(reset_pos_btn)
+
+        # Botón: Resetear negativos
+        reset_neg_btn = QPushButton("🗑️ Resetear Negativos")
+        reset_neg_btn.setToolTip("Todos los archivos votados negativamente pasan a neutral")
+        reset_neg_btn.clicked.connect(self._reset_negative)
+        reset_neg_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #f44336;
+                color: white;
+                padding: 8px;
+                border-radius: 4px;
+            }
+            QPushButton:hover {
+                background-color: #da190b;
+            }
+        """)
+        layout.addWidget(reset_neg_btn)
+
+        # Botón: Resetear TODO
+        reset_all_btn = QPushButton("⚠️ Resetear TODOS los Votos")
+        reset_all_btn.setToolTip("TODOS los votos pasan a neutral")
+        reset_all_btn.clicked.connect(self._reset_all)
+        reset_all_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #ff9800;
+                color: white;
+                padding: 8px;
+                border-radius: 4px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #e68900;
+            }
+        """)
+        layout.addWidget(reset_all_btn)
+
+
+
         # Espaciador
         layout.addStretch()
         
@@ -170,3 +237,19 @@ class ConfigWidget(QWidget):
             self.neutral_spin.value(),
             self.negative_spin.value()
         )
+    # Señales para comunicar con MainWindow
+    resetPositive = Signal()
+    resetNegative = Signal()
+    resetAll = Signal()
+
+    def _reset_positive(self):
+        """Emitir señal para resetear positivos"""
+        self.resetPositive.emit()
+
+    def _reset_negative(self):
+        """Emitir señal para resetear negativos"""
+        self.resetNegative.emit()
+
+    def _reset_all(self):
+        """Emitir señal para resetear todos"""
+        self.resetAll.emit()

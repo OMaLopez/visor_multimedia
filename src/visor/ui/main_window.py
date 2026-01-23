@@ -71,6 +71,9 @@ class MainWindow(QMainWindow):
         self.viewer.requestPrevious.connect(self._go_back)
         self.viewer.voteChanged.connect(self._on_vote_changed)
         self.config_widget.configChanged.connect(self._on_config_changed)
+        self.config_widget.resetPositive.connect(self._on_reset_positive)
+        self.config_widget.resetNegative.connect(self._on_reset_negative)
+        self.config_widget.resetAll.connect(self._on_reset_all)
     
     def _on_file_selected_from_list(self, file_path: str):
         """Archivo seleccionado desde la lista"""
@@ -234,6 +237,58 @@ class MainWindow(QMainWindow):
         except Exception as e:
             print(f"Error cargando configuración: {e}")
     
+    def _on_reset_positive(self):
+        """Resetear votos positivos"""
+        if not self.nav_system:
+            return
+        
+        reply = QMessageBox.question(
+            self,
+            "Confirmar",
+            "¿Resetear todos los votos positivos a neutral?",
+            QMessageBox.Yes | QMessageBox.No
+        )
+        
+        if reply == QMessageBox.Yes:
+            self.nav_system.reset_positive_votes()
+            self._save_settings()
+            self.statusBar().showMessage("✓ Votos positivos reseteados", 3000)
+
+    def _on_reset_negative(self):
+        """Resetear votos negativos"""
+        if not self.nav_system:
+            return
+        
+        reply = QMessageBox.question(
+            self,
+            "Confirmar",
+            "¿Resetear todos los votos negativos a neutral?",
+            QMessageBox.Yes | QMessageBox.No
+        )
+        
+        if reply == QMessageBox.Yes:
+            self.nav_system.reset_negative_votes()
+            self._save_settings()
+            self.statusBar().showMessage("✓ Votos negativos reseteados", 3000)
+
+    def _on_reset_all(self):
+        """Resetear TODOS los votos"""
+        if not self.nav_system:
+            return
+        
+        reply = QMessageBox.warning(
+            self,
+            "⚠️ Confirmar Acción",
+            "¿Resetear TODOS los votos a neutral?\n\nEsta acción NO se puede deshacer.",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No
+        )
+        
+        if reply == QMessageBox.Yes:
+            self.nav_system.reset_votes()
+            self._save_settings()
+            self.statusBar().showMessage("✓ Todos los votos reseteados", 3000)
+
     def closeEvent(self, event):
         """Guardar al cerrar"""
         self._save_settings()

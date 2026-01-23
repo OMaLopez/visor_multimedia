@@ -336,6 +336,28 @@ class NavigationSystem:
         """Reset completo"""
         self.reset_history()
         self.reset_votes()
+    def reset_positive_votes(self):
+        """Reset only positive votes to neutral"""
+        votes_to_remove = [path for path, vote in self.votes.items() if vote == 1]
+        for path in votes_to_remove:
+            del self.votes[path]
+        
+        # Limpiar cache de positivos
+        self.recent_positive.clear()
+
+    def reset_negative_votes(self):
+        """Reset only negative votes to neutral"""
+        votes_to_remove = [path for path, vote in self.votes.items() if vote == -1]
+        for path in votes_to_remove:
+            del self.votes[path]
+        
+        # Limpiar cache de negativos
+        self.recent_negative.clear()
+
+    def reset_neutral_votes(self):
+        """Remove all neutral votes (keep only voted files)"""
+        # Los neutrales no están en self.votes, así que no hay nada que hacer
+        self.recent_neutral.clear()
 
 
 # ========================================
