@@ -163,7 +163,12 @@ class NavigationSystem:
         return None
     
     def next_random(self) -> Optional[str]:
-        """Obtener siguiente archivo aleatorio"""
+        """Obtener siguiente archivo (historial o aleatorio)"""
+        # Si hay futuro en el historial, avanzar por ahí
+        if self.can_go_forward_in_history():
+            return self.go_forward_in_history()
+        
+        # Si no hay futuro, generar aleatorio
         candidates = self._get_eligible_files()
         
         if not candidates:
@@ -179,14 +184,11 @@ class NavigationSystem:
         # Selección aleatoria
         next_file = random.choice(candidates)
         
-        # Actualizar historial
-        if self.history_position < len(self.history) - 1:
-            self.history = self.history[:self.history_position + 1]
-        
+        # Como estamos al final del historial, añadir normalmente
         self.history.append(next_file)
         self.history_position = len(self.history) - 1
         
-        # Limitar tamaño
+        # Limitar tamaño del historial
         if len(self.history) > self.max_history:
             overflow = len(self.history) - self.max_history
             self.history = self.history[overflow:]
