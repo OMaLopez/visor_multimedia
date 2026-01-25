@@ -74,6 +74,8 @@ class MainWindow(QMainWindow):
         self.config_widget.resetPositive.connect(self._on_reset_positive)
         self.config_widget.resetNegative.connect(self._on_reset_negative)
         self.config_widget.resetAll.connect(self._on_reset_all)
+        # Config: límite de historial
+        self.config_widget.historyLimitChanged.connect(self._on_history_limit_changed)
     
     def _on_file_selected_from_list(self, file_path: str):
         """Archivo seleccionado desde la lista"""
@@ -82,12 +84,13 @@ class MainWindow(QMainWindow):
             if not files:
                 return
             
-            pos, neu, neg = self.config_widget.get_config()
+            pos, neu, neg, hist = self.config_widget.get_config()
             self.nav_system = NavigationSystem(
                 files,
                 positive_cooldown=pos,
                 neutral_cooldown=neu,
-                negative_cooldown=neg
+                negative_cooldown=neg,
+                max_history=hist
             )
             
             # Cargar votos guardados si existen
@@ -110,12 +113,13 @@ class MainWindow(QMainWindow):
                 QMessageBox.warning(self, "Sin archivos", "Añade directorios primero")
                 return
             
-            pos, neu, neg = self.config_widget.get_config()
+            pos, neu, neg, hist = self.config_widget.get_config()
             self.nav_system = NavigationSystem(
                 files,
                 positive_cooldown=pos,
                 neutral_cooldown=neu,
-                negative_cooldown=neg
+                negative_cooldown=neg,
+                max_history=hist
             )
             
             if self._loaded_settings and 'votes' in self._loaded_settings:
@@ -175,6 +179,15 @@ class MainWindow(QMainWindow):
                 3000
             )
             self._save_settings()
+    def _on_history_limit_changed(self, limit: int):
+        """Cambiar límite de historial"""
+        if self.nav_system:
+            self.nav_system.set_max_history(limit)
+            self.statusBar().showMessage(
+                f"Límite de historial: {limit} archivos",
+                3000
+            )
+            self._save_settings()
     
     def _update_status(self):
         """Actualizar barra de estado"""
@@ -229,8 +242,11 @@ class MainWindow(QMainWindow):
                 self.config_widget.set_config(
                     data.get('positive_cooldown', 5),
                     data.get('neutral_cooldown', 20),
-                    data.get('negative_cooldown', 0)
+                    data.get('negative_cooldown', 0),
+                    data.get('max_history', 1000)
                 )
+            if 'max_history' in data:
+                self.config_widget.set_history_limit(data['max_history'])
             
             self._loaded_settings = data
             

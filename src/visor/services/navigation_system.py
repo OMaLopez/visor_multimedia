@@ -110,6 +110,16 @@ class NavigationSystem:
         self.negative_cooldown = max(0, cooldown)
         maxlen = self.negative_cooldown if self.negative_cooldown > 0 else 1
         self._resize_deque(self.recent_negative, maxlen)
+
+    def set_max_history(self, max_history: int):
+        """Cambiar límite máximo de historial"""
+        self.max_history = max(100, max_history)  # Mínimo 100
+        
+        # Si el historial actual excede el nuevo límite, truncar
+        if len(self.history) > self.max_history:
+            overflow = len(self.history) - self.max_history
+            self.history = self.history[overflow:]
+            self.history_position = max(0, self.history_position - overflow)
     
     def get_cooldown_for_file(self, file_path: str) -> int:
         """Obtener cooldown efectivo para un archivo"""
@@ -308,7 +318,8 @@ class NavigationSystem:
             'votes': self.votes.copy(),
             'positive_cooldown': self.positive_cooldown,
             'neutral_cooldown': self.neutral_cooldown,
-            'negative_cooldown': self.negative_cooldown
+            'negative_cooldown': self.negative_cooldown,
+            'max_history': self.max_history
         }
     
     def import_data(self, data: Dict):
@@ -321,6 +332,8 @@ class NavigationSystem:
             self.set_neutral_cooldown(data['neutral_cooldown'])
         if 'negative_cooldown' in data:
             self.set_negative_cooldown(data['negative_cooldown'])
+        if 'max_history' in data:
+            self.set_max_history(data['max_history'])
     
     def reset_history(self):
         """Limpiar historial"""

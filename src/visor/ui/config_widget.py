@@ -10,6 +10,8 @@ class ConfigWidget(QWidget):
     
     # Señales
     configChanged = Signal(int, int, int)  # (positive, neutral, negative)
+
+    historyLimitChanged = Signal(int)
     
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -88,6 +90,22 @@ class ConfigWidget(QWidget):
         
         layout.addWidget(negative_group)
         
+        # --- Historial ---
+        history_group = QGroupBox("📜 Historial")
+        history_layout = QHBoxLayout(history_group)
+
+        history_layout.addWidget(QLabel("Límite de archivos:"))
+
+        self.history_spin = QSpinBox()
+        self.history_spin.setRange(100, 100000)
+        self.history_spin.setValue(1000)
+        self.history_spin.setSingleStep(100)
+        self.history_spin.setToolTip("Cuántos archivos recordar al navegar hacia atrás")
+        self.history_spin.valueChanged.connect(self._on_history_changed)
+        history_layout.addWidget(self.history_spin)
+
+        layout.addWidget(history_group)
+        
         # Separador
         line2 = QFrame()
         line2.setFrameShape(QFrame.HLine)
@@ -105,25 +123,25 @@ class ConfigWidget(QWidget):
         # Preset: Balanceado
         btn_balanced = QPushButton("⚖️ Balanceado")
         btn_balanced.setToolTip("Positivos: 5, Neutrales: 20, Negativos: 0")
-        btn_balanced.clicked.connect(lambda: self.set_config(5, 20, 0))
+        btn_balanced.clicked.connect(lambda: self.set_config(5, 20, 0, 1000))
         preset_layout.addWidget(btn_balanced)
         
         # Preset: Favorece positivos
         btn_aggressive = QPushButton("🔥 Favorece Positivos")
         btn_aggressive.setToolTip("Positivos: 3, Neutrales: 30, Negativos: 0")
-        btn_aggressive.clicked.connect(lambda: self.set_config(3, 30, 0))
+        btn_aggressive.clicked.connect(lambda: self.set_config(3, 30, 0, 1000))
         preset_layout.addWidget(btn_aggressive)
         
         # Preset: Segunda oportunidad
         btn_second = QPushButton("🔄 Segunda Oportunidad")
         btn_second.setToolTip("Positivos: 5, Neutrales: 20, Negativos: 50")
-        btn_second.clicked.connect(lambda: self.set_config(5, 20, 50))
+        btn_second.clicked.connect(lambda: self.set_config(5, 20, 50, 1000))
         preset_layout.addWidget(btn_second)
         
         # Preset: Aleatorio
         btn_random = QPushButton("🎲 Casi Aleatorio")
         btn_random.setToolTip("Positivos: 10, Neutrales: 10, Negativos: 10")
-        btn_random.clicked.connect(lambda: self.set_config(10, 10, 10))
+        btn_random.clicked.connect(lambda: self.set_config(10, 10, 10, 1000))
         preset_layout.addWidget(btn_random)
         
         layout.addLayout(preset_layout)
@@ -222,20 +240,34 @@ class ConfigWidget(QWidget):
             self.neutral_spin.value(),
             self.negative_spin.value()
         )
+
+    def _on_history_changed(self, value):
+        """Emitir señal cuando cambia el límite de historial"""
+        self.historyLimitChanged.emit(value)
     
-    def set_config(self, positive: int, neutral: int, negative: int):
+    def set_config(self, positive: int, neutral: int, negative: int, history: int = 1000):
         """Establecer configuración"""
         self.positive_spin.setValue(positive)
         self.neutral_spin.setValue(neutral)
         self.negative_spin.setValue(negative)
+        self.history_spin.setValue(history)
         self._on_config_changed()
+
+    def set_history_limit(self, limit: int):
+        """Establecer límite de historial"""
+        self.history_spin.setValue(limit)
+
+    def get_history_limit(self) -> int:
+        """Obtener límite de historial"""
+        return self.history_spin.value()
     
     def get_config(self) -> tuple:
         """Obtener configuración actual"""
         return (
             self.positive_spin.value(),
             self.neutral_spin.value(),
-            self.negative_spin.value()
+            self.negative_spin.value(),
+            self.history_spin.value()
         )
     # Señales para comunicar con MainWindow
     resetPositive = Signal()
