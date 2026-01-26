@@ -178,7 +178,7 @@ class MainWindow(QMainWindow):
                 f"Configuración actualizada: 👍={positive}, ⚪={neutral}, 👎={negative}",
                 3000
             )
-            self._save_settings()
+        self._save_settings()
     def _on_history_limit_changed(self, limit: int):
         """Cambiar límite de historial"""
         if self.nav_system:
@@ -187,7 +187,7 @@ class MainWindow(QMainWindow):
                 f"Límite de historial: {limit} archivos",
                 3000
             )
-            self._save_settings()
+        self._save_settings()
     
     def _update_status(self):
         """Actualizar barra de estado"""
@@ -215,13 +215,32 @@ class MainWindow(QMainWindow):
     
     def _save_settings(self):
         """Guardar configuración y votos"""
-        if not self.nav_system:
-            return
-        
         settings_path = Path.home() / ".visor_multimedia_settings.json"
         
         try:
-            data = self.nav_system.export_data()
+            # Leer datos existentes si existen
+            existing_data = {}
+            if settings_path.exists():
+                try:
+                    with open(settings_path, 'r') as f:
+                        existing_data = json.load(f)
+                except:
+                    pass  # Si hay error leyendo, usar vacío
+            
+            if self.nav_system:
+                # Si hay sistema de navegación, exportar todo
+                data = self.nav_system.export_data()
+            else:
+                # Si no hay sistema, solo actualizar configuración
+                pos, neu, neg, hist = self.config_widget.get_config()
+                data = {
+                    'votes': existing_data.get('votes', {}),
+                    'positive_cooldown': pos,
+                    'neutral_cooldown': neu,
+                    'negative_cooldown': neg,
+                    'max_history': hist
+                }
+            
             with open(settings_path, 'w') as f:
                 json.dump(data, f, indent=2)
         except Exception as e:

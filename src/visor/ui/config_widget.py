@@ -240,6 +240,7 @@ class ConfigWidget(QWidget):
             self.neutral_spin.value(),
             self.negative_spin.value()
         )
+        self.historyLimitChanged.emit(self.history_spin.value())
 
     def _on_history_changed(self, value):
         """Emitir señal cuando cambia el límite de historial"""
