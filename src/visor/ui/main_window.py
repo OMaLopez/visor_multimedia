@@ -25,13 +25,11 @@ class MainWindow(QMainWindow):
         self.nav_system = None
         self._loaded_settings = None
 
-        # Intentar cargar configuración guardada
+        # CARGAR CONFIGURACIÓN ANTES DE SETUP UI
         self._load_settings()
         
         self._setup_ui()
         self._connect_signals()
-        
-        
     
     def _setup_ui(self):
         """Configurar interfaz"""
@@ -48,20 +46,26 @@ class MainWindow(QMainWindow):
         sidebar_tabs = QTabWidget()
         sidebar_tabs.setMaximumWidth(400)
         
-
         self.sidebar = SidebarWidget()
         sidebar_tabs.addTab(self.sidebar, "📁 Archivos")
 
         # CREAR NAV_SYSTEM TEMPORAL CON VOTOS GUARDADOS
         if self._loaded_settings and 'votes' in self._loaded_settings:
-            from ..services.navigation_system import NavigationSystem
             temp_nav = NavigationSystem([], max_history=100)
             temp_nav.votes = self._loaded_settings['votes'].copy()
             self.sidebar.set_navigation_system(temp_nav)
-
         
         self.config_widget = ConfigWidget()
         sidebar_tabs.addTab(self.config_widget, "⚙️ Configuración")
+
+        if self._loaded_settings:
+            if 'positive_cooldown' in self._loaded_settings:
+                self.config_widget.set_config(
+                    self._loaded_settings.get('positive_cooldown', 5),
+                    self._loaded_settings.get('neutral_cooldown', 20),
+                    self._loaded_settings.get('negative_cooldown', 0),
+                    self._loaded_settings.get('max_history', 1000)
+                )
         
         # Visor
         self.viewer = ViewerContainer()
@@ -85,7 +89,6 @@ class MainWindow(QMainWindow):
         self.config_widget.resetPositive.connect(self._on_reset_positive)
         self.config_widget.resetNegative.connect(self._on_reset_negative)
         self.config_widget.resetAll.connect(self._on_reset_all)
-        # Config: límite de historial
         self.config_widget.historyLimitChanged.connect(self._on_history_limit_changed)
     
     def _on_file_selected_from_list(self, file_path: str):
@@ -96,19 +99,32 @@ class MainWindow(QMainWindow):
                 return
             
             pos, neu, neg, hist = self.config_widget.get_config()
-            self.nav_system = NavigationSystem(
-                files,
-                positive_cooldown=pos,
-                neutral_cooldown=neu,
-                negative_cooldown=neg,
-                max_history=hist
-            )
             
-            # Cargar votos guardados si existen
-            if self._loaded_settings and 'votes' in self._loaded_settings:
-                self.nav_system.import_data(self._loaded_settings)
-            # CONECTAR SIDEBAR CON NAV_SYSTEM
-            self.sidebar.set_navigation_system(self.nav_system)
+            # Verificar si el sidebar ya tiene un nav_system temporal
+            if self.sidebar._nav_system is not None:
+                # Reutilizar el temporal (que ya tiene los votos)
+                self.nav_system = self.sidebar._nav_system
+                self.nav_system.update_file_list(files)
+                self.nav_system.max_history = hist
+                self.nav_system.set_positive_cooldown(pos)
+                self.nav_system.set_neutral_cooldown(neu)
+                self.nav_system.set_negative_cooldown(neg)
+            else:
+                # Crear nuevo
+                self.nav_system = NavigationSystem(
+                    files,
+                    positive_cooldown=pos,
+                    neutral_cooldown=neu,
+                    negative_cooldown=neg,
+                    max_history=hist
+                )
+                
+                # Cargar votos guardados si existen
+                if self._loaded_settings and 'votes' in self._loaded_settings:
+                    self.nav_system.import_data(self._loaded_settings)
+                
+                # Conectar sidebar con nav_system
+                self.sidebar.set_navigation_system(self.nav_system)
         
         self.viewer.show_file(file_path)
         
@@ -127,21 +143,32 @@ class MainWindow(QMainWindow):
                 return
             
             pos, neu, neg, hist = self.config_widget.get_config()
-            self.nav_system = NavigationSystem(
-                files,
-                positive_cooldown=pos,
-                neutral_cooldown=neu,
-                negative_cooldown=neg,
-                max_history=hist
-            )
-            if self._loaded_settings and 'votes' in self._loaded_settings:
-                self.nav_system.import_data(self._loaded_settings)
-
-            # CONECTAR SIDEBAR CON NAV_SYSTEM ← AÑADIR
-            self.sidebar.set_navigation_system(self.nav_system)
             
-            if self._loaded_settings and 'votes' in self._loaded_settings:
-                self.nav_system.import_data(self._loaded_settings)
+            # Verificar si el sidebar ya tiene un nav_system temporal
+            if self.sidebar._nav_system is not None:
+                # Reutilizar el temporal (que ya tiene los votos)
+                self.nav_system = self.sidebar._nav_system
+                self.nav_system.update_file_list(files)
+                self.nav_system.max_history = hist
+                self.nav_system.set_positive_cooldown(pos)
+                self.nav_system.set_neutral_cooldown(neu)
+                self.nav_system.set_negative_cooldown(neg)
+            else:
+                # Crear nuevo
+                self.nav_system = NavigationSystem(
+                    files,
+                    positive_cooldown=pos,
+                    neutral_cooldown=neu,
+                    negative_cooldown=neg,
+                    max_history=hist
+                )
+                
+                # Cargar votos guardados si existen
+                if self._loaded_settings and 'votes' in self._loaded_settings:
+                    self.nav_system.import_data(self._loaded_settings)
+                
+                # Conectar sidebar con nav_system
+                self.sidebar.set_navigation_system(self.nav_system)
         
         next_file = self.nav_system.next_random()
         
@@ -150,14 +177,13 @@ class MainWindow(QMainWindow):
             vote = self.nav_system.get_vote(next_file)
             self.viewer.set_current_vote(vote)
             self._update_status()
-        
+            
+            # Pre-cargar siguiente
             if self.nav_system.can_go_forward_in_history():
-                # Hay futuro, pre-cargar el siguiente del historial
                 future_pos = self.nav_system.history_position + 1
                 if future_pos < len(self.nav_system.history):
                     next_to_preload = self.nav_system.history[future_pos]
                     self.viewer.preload_next(next_to_preload)
-
         else:
             QMessageBox.information(
                 self,
@@ -206,6 +232,7 @@ class MainWindow(QMainWindow):
                 3000
             )
         self._save_settings()
+    
     def _on_history_limit_changed(self, limit: int):
         """Cambiar límite de historial"""
         if self.nav_system:
@@ -252,13 +279,13 @@ class MainWindow(QMainWindow):
                     with open(settings_path, 'r') as f:
                         existing_data = json.load(f)
                 except:
-                    pass  # Si hay error leyendo, usar vacío
+                    pass
             
             if self.nav_system:
                 # Si hay sistema de navegación, exportar todo
                 data = self.nav_system.export_data()
             else:
-                # Si no hay sistema, solo actualizar configuración
+                # Si no hay sistema, preservar votos existentes
                 pos, neu, neg, hist = self.config_widget.get_config()
                 data = {
                     'votes': existing_data.get('votes', {}),
@@ -284,16 +311,7 @@ class MainWindow(QMainWindow):
             with open(settings_path, 'r') as f:
                 data = json.load(f)
             
-            if 'positive_cooldown' in data:
-                self.config_widget.set_config(
-                    data.get('positive_cooldown', 5),
-                    data.get('neutral_cooldown', 20),
-                    data.get('negative_cooldown', 0),
-                    data.get('max_history', 1000)
-                )
-            if 'max_history' in data:
-                self.config_widget.set_history_limit(data['max_history'])
-            
+            # Guardar los datos cargados
             self._loaded_settings = data
             
         except Exception as e:
@@ -314,6 +332,7 @@ class MainWindow(QMainWindow):
         if reply == QMessageBox.Yes:
             self.nav_system.reset_positive_votes()
             self._save_settings()
+            self.sidebar.refresh_votes()
             self.statusBar().showMessage("✓ Votos positivos reseteados", 3000)
 
     def _on_reset_negative(self):
@@ -331,6 +350,7 @@ class MainWindow(QMainWindow):
         if reply == QMessageBox.Yes:
             self.nav_system.reset_negative_votes()
             self._save_settings()
+            self.sidebar.refresh_votes()
             self.statusBar().showMessage("✓ Votos negativos reseteados", 3000)
 
     def _on_reset_all(self):
@@ -349,6 +369,7 @@ class MainWindow(QMainWindow):
         if reply == QMessageBox.Yes:
             self.nav_system.reset_votes()
             self._save_settings()
+            self.sidebar.refresh_votes()
             self.statusBar().showMessage("✓ Todos los votos reseteados", 3000)
 
     def closeEvent(self, event):
