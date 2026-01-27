@@ -2,10 +2,10 @@ from pathlib import Path
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, 
     QListWidget, QListWidgetItem, QFileDialog, QLabel,
-    QProgressBar, QMenu, QStyle
+    QProgressBar, QMenu
 )
 from PySide6.QtCore import Qt, Signal, QThread, QMutex, QMutexLocker
-from PySide6.QtGui import QAction
+from PySide6.QtGui import QAction, QColor
 
 
 # Extensiones soportadas
@@ -82,7 +82,8 @@ class SidebarWidget(QWidget):
         
         self._scanner_thread = None
         self._selected_directories = []
-        self._all_files = []  # Lista completa de archivos
+        self._all_files = []
+        self._nav_system = None  # Sistema de navegación para votos
         
         self._setup_ui()
         
@@ -176,16 +177,18 @@ class SidebarWidget(QWidget):
         
         # Añadir a la UI
         path = Path(file_path)
+        
         item = QListWidgetItem(path.name)
         item.setData(Qt.UserRole, file_path)
         
-        # Icono según tipo usando QStyle
-        if path.suffix.lower() in IMAGE_EXTENSIONS:
-            icon = self.style().standardIcon(QStyle.SP_FileDialogContentsView)
-        else:
-            icon = self.style().standardIcon(QStyle.SP_MediaPlay)
+        # Aplicar color de fondo si hay sistema de navegación
+        if self._nav_system:
+            vote = self._nav_system.get_vote(file_path)
+            if vote == 1:  # Positivo
+                item.setBackground(QColor(76, 175, 80, 100))  # Verde claro
+            elif vote == -1:  # Negativo
+                item.setBackground(QColor(244, 67, 54, 100))  # Rojo claro
         
-        item.setIcon(icon)
         self.file_list.addItem(item)
         
         # Actualizar contador
@@ -204,6 +207,10 @@ class SidebarWidget(QWidget):
         
         if total == 0:
             self.info_label.setText("No se encontraron archivos multimedia")
+        
+        # REFRESCAR VOTOS SI HAY SISTEMA DE NAVEGACIÓN
+        if self._nav_system:
+            self.refresh_votes()
     
     def _clear_all(self):
         """Limpiar lista y directorios"""
@@ -262,6 +269,35 @@ class SidebarWidget(QWidget):
         
         file_path = item.data(Qt.UserRole)
         QApplication.clipboard().setText(file_path)
+    
+    # ========================================
+    # Sistema de votación
+    # ========================================
+    
+    def set_navigation_system(self, nav_system):
+        """Establecer sistema de navegación para mostrar votos"""
+        self._nav_system = nav_system
+        self.refresh_votes()
+    
+    def refresh_votes(self):
+        """Refrescar colores de votos en la lista"""
+        if not self._nav_system:
+            return
+        
+        for i in range(self.file_list.count()):
+            item = self.file_list.item(i)
+            file_path = item.data(Qt.UserRole)
+            
+            if file_path:
+                vote = self._nav_system.get_vote(file_path)
+                
+                # Aplicar color de fondo según voto
+                if vote == 1:  # Positivo
+                    item.setBackground(QColor(76, 175, 80, 100))  # Verde claro
+                elif vote == -1:  # Negativo
+                    item.setBackground(QColor(244, 67, 54, 100))  # Rojo claro
+                else:  # Neutral
+                    item.setBackground(QColor(0, 0, 0, 0))  # Transparente
     
     # ========================================
     # API pública

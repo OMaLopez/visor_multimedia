@@ -24,12 +24,14 @@ class MainWindow(QMainWindow):
         # Sistema de navegación
         self.nav_system = None
         self._loaded_settings = None
+
+        # Intentar cargar configuración guardada
+        self._load_settings()
         
         self._setup_ui()
         self._connect_signals()
         
-        # Intentar cargar configuración guardada
-        self._load_settings()
+        
     
     def _setup_ui(self):
         """Configurar interfaz"""
@@ -46,8 +48,17 @@ class MainWindow(QMainWindow):
         sidebar_tabs = QTabWidget()
         sidebar_tabs.setMaximumWidth(400)
         
+
         self.sidebar = SidebarWidget()
         sidebar_tabs.addTab(self.sidebar, "📁 Archivos")
+
+        # CREAR NAV_SYSTEM TEMPORAL CON VOTOS GUARDADOS
+        if self._loaded_settings and 'votes' in self._loaded_settings:
+            from ..services.navigation_system import NavigationSystem
+            temp_nav = NavigationSystem([], max_history=100)
+            temp_nav.votes = self._loaded_settings['votes'].copy()
+            self.sidebar.set_navigation_system(temp_nav)
+
         
         self.config_widget = ConfigWidget()
         sidebar_tabs.addTab(self.config_widget, "⚙️ Configuración")
@@ -96,6 +107,8 @@ class MainWindow(QMainWindow):
             # Cargar votos guardados si existen
             if self._loaded_settings and 'votes' in self._loaded_settings:
                 self.nav_system.import_data(self._loaded_settings)
+            # CONECTAR SIDEBAR CON NAV_SYSTEM
+            self.sidebar.set_navigation_system(self.nav_system)
         
         self.viewer.show_file(file_path)
         
@@ -121,6 +134,11 @@ class MainWindow(QMainWindow):
                 negative_cooldown=neg,
                 max_history=hist
             )
+            if self._loaded_settings and 'votes' in self._loaded_settings:
+                self.nav_system.import_data(self._loaded_settings)
+
+            # CONECTAR SIDEBAR CON NAV_SYSTEM ← AÑADIR
+            self.sidebar.set_navigation_system(self.nav_system)
             
             if self._loaded_settings and 'votes' in self._loaded_settings:
                 self.nav_system.import_data(self._loaded_settings)
@@ -132,6 +150,14 @@ class MainWindow(QMainWindow):
             vote = self.nav_system.get_vote(next_file)
             self.viewer.set_current_vote(vote)
             self._update_status()
+        
+            if self.nav_system.can_go_forward_in_history():
+                # Hay futuro, pre-cargar el siguiente del historial
+                future_pos = self.nav_system.history_position + 1
+                if future_pos < len(self.nav_system.history):
+                    next_to_preload = self.nav_system.history[future_pos]
+                    self.viewer.preload_next(next_to_preload)
+
         else:
             QMessageBox.information(
                 self,
@@ -166,6 +192,7 @@ class MainWindow(QMainWindow):
         
         self._update_status()
         self._save_settings()
+        self.sidebar.refresh_votes()
     
     def _on_config_changed(self, positive: int, neutral: int, negative: int):
         """Aplicar nueva configuración"""

@@ -6,13 +6,67 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtMultimedia import QMediaPlayer, QAudioOutput
 from PySide6.QtMultimediaWidgets import QVideoWidget
-from PySide6.QtCore import Qt, QUrl, QTimer, QSize, Signal
+from PySide6.QtCore import Qt, QUrl, QTimer, QSize, Signal, QThread
 from PySide6.QtGui import QPixmap, QKeyEvent, QImageReader
 
 
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp", ".webp", ".gif"}
 VIDEO_EXTENSIONS = {".mp4", ".mkv", ".avi", ".webm", ".mov"}
 
+
+class ImagePreloader(QThread):
+    """Thread para pre-cargar imágenes en segundo plano"""
+    imageLoaded = Signal(str, QPixmap)  # (path, pixmap)
+    
+    def __init__(self):
+        super().__init__()
+        self.path_to_load = None
+        self.should_stop = False
+    
+    def load_image(self, path: str):
+        """Solicitar carga de imagen"""
+        self.path_to_load = path
+        if not self.isRunning():
+            self.start()
+    
+    def run(self):
+        """Cargar imagen en segundo plano"""
+        if not self.path_to_load:
+            return
+        
+        path = self.path_to_load
+        self.path_to_load = None
+        
+        # Leer imagen
+        reader = QImageReader(path)
+        if not reader.canRead():
+            return
+        
+        original_size = reader.size()
+        max_dimension = 7680
+        
+        # Escalar si es necesario
+        if original_size.width() > max_dimension or original_size.height() > max_dimension:
+            if original_size.width() > original_size.height():
+                scale_factor = max_dimension / original_size.width()
+            else:
+                scale_factor = max_dimension / original_size.height()
+            
+            new_width = int(original_size.width() * scale_factor)
+            new_height = int(original_size.height() * scale_factor)
+            
+            reader.setScaledSize(QSize(new_width, new_height))
+        
+        image = reader.read()
+        
+        if not image.isNull():
+            pixmap = QPixmap.fromImage(image)
+            self.imageLoaded.emit(path, pixmap)
+    
+    def stop(self):
+        """Detener thread"""
+        self.should_stop = True
+        self.wait()
 
 class ViewerContainer(QWidget):
     # Señales
@@ -27,7 +81,11 @@ class ViewerContainer(QWidget):
         self._current_pixmap = None
         self._seeking = False
         self._video_widget = None
-        self._current_file = None  # Archivo actualmente mostrado
+        self._current_file = None
+
+        self._preloaded_cache = {}  # Caché: {path: pixmap}
+        self._preloader = ImagePreloader()
+        self._preloader.imageLoaded.connect(self._on_image_preloaded)
 
         # ---------------- Player ----------------
         self.player = QMediaPlayer(self)
@@ -182,6 +240,32 @@ class ViewerContainer(QWidget):
         """Set current vote from external source"""
         self._update_vote_display(vote)
 
+    def _on_image_preloaded(self, path: str, pixmap: QPixmap):
+        """Imagen pre-cargada en caché"""
+        self._preloaded_cache[path] = pixmap
+        # Mantener solo 3 imágenes en caché
+        if len(self._preloaded_cache) > 3:
+            # Eliminar la más antigua (primera)
+            first_key = next(iter(self._preloaded_cache))
+            del self._preloaded_cache[first_key]
+
+    def preload_next(self, next_path: str):
+        """Pre-cargar siguiente imagen en segundo plano"""
+        if not next_path:
+            return
+        
+        # Solo pre-cargar imágenes
+        ext = Path(next_path).suffix.lower()
+        if ext not in IMAGE_EXTENSIONS:
+            return
+        
+        # Si ya está en caché, no hacer nada
+        if next_path in self._preloaded_cache:
+            return
+        
+        # Solicitar carga en segundo plano
+        self._preloader.load_image(next_path)
+
     # =================================================
     # Video widgets - Create/Destroy
     # =================================================
@@ -294,26 +378,31 @@ class ViewerContainer(QWidget):
 
     def _show_image(self, path: str):
         """Display an image file with smart loading"""
-        # Stop player and destroy video widget
         self.player.stop()
         self._destroy_video_widget()
         
-        # Usar QImageReader para control avanzado
+        # Verificar si está en caché
+        if path in self._preloaded_cache:
+            pixmap = self._preloaded_cache[path]
+            print(f"✓ Usando imagen pre-cargada: {Path(path).name}")
+            self._current_pixmap = pixmap
+            self._update_image()
+            self.stack.setCurrentIndex(0)
+            self.setFocus()
+            self.activateWindow()
+            return
+        
+        # Si no está en caché, cargar normalmente
         reader = QImageReader(path)
         
         if not reader.canRead():
             QMessageBox.warning(self, "Error", f"No se puede leer la imagen:\n{path}")
             return
         
-        # Obtener tamaño original
         original_size = reader.size()
-        
-        # Límite razonable: 8K (7680x4320)
         max_dimension = 7680
         
-        # Si la imagen es muy grande, escalarla al cargar
         if original_size.width() > max_dimension or original_size.height() > max_dimension:
-            # Calcular nuevo tamaño manteniendo aspecto
             if original_size.width() > original_size.height():
                 scale_factor = max_dimension / original_size.width()
             else:
@@ -325,7 +414,6 @@ class ViewerContainer(QWidget):
             reader.setScaledSize(QSize(new_width, new_height))
             print(f"Imagen redimensionada de {original_size.width()}x{original_size.height()} a {new_width}x{new_height}")
         
-        # Leer imagen
         image = reader.read()
         
         if image.isNull():
@@ -469,3 +557,5 @@ class ViewerContainer(QWidget):
         """Clean up resources when closing"""
         self.player.stop()
         self._destroy_video_widget()
+        self._preloader.stop()  
+        self._preloaded_cache.clear() 
