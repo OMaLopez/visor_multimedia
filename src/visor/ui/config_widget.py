@@ -54,6 +54,7 @@ class ConfigWidget(QWidget):
         self.positive_spin.setRange(0, 200)
         self.positive_spin.setValue(5)
         self.positive_spin.setSuffix(" archivos")
+        self.positive_spin.setSpecialValueText("Nunca")
         self.positive_spin.valueChanged.connect(self._on_config_changed)
         positive_layout.addWidget(self.positive_spin)
         
@@ -69,6 +70,7 @@ class ConfigWidget(QWidget):
         self.neutral_spin.setRange(0, 200)
         self.neutral_spin.setValue(20)
         self.neutral_spin.setSuffix(" archivos")
+        self.neutral_spin.setSpecialValueText("Nunca")
         self.neutral_spin.valueChanged.connect(self._on_config_changed)
         neutral_layout.addWidget(self.neutral_spin)
         
@@ -216,22 +218,7 @@ class ConfigWidget(QWidget):
         # Espaciador
         layout.addStretch()
         
-        # Botón de aplicar
-        apply_btn = QPushButton("✓ Aplicar Configuración")
-        apply_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #4CAF50;
-                color: white;
-                font-weight: bold;
-                padding: 10px;
-                border-radius: 5px;
-            }
-            QPushButton:hover {
-                background-color: #45a049;
-            }
-        """)
-        apply_btn.clicked.connect(self._on_config_changed)
-        layout.addWidget(apply_btn)
+
     
     def _on_config_changed(self):
         """Emitir señal cuando cambia la configuración"""
