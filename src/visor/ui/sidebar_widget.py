@@ -8,19 +8,19 @@ from PySide6.QtCore import Qt, Signal, QThread, QMutex, QMutexLocker
 from PySide6.QtGui import QAction, QColor
 
 
-# Extensiones soportadas
+# Supported extensions
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp", ".webp", ".gif"}
 VIDEO_EXTENSIONS = {".mp4", ".mkv", ".avi", ".webm", ".mov"}
 ALL_EXTENSIONS = IMAGE_EXTENSIONS | VIDEO_EXTENSIONS
 
 
 class FileScanner(QThread):
-    """Thread para escanear directorios sin bloquear la UI"""
+    """Thread to scan directories without blocking UI"""
     
-    # Señales
-    fileFound = Signal(str)  # Emite cada archivo encontrado
+    # Signals
+    fileFound = Signal(str)  # Emits each file found
     progress = Signal(int, int)  # (current, total)
-    finished = Signal(int)  # Total de archivos encontrados
+    finished = Signal(int)  # Total files found
     
     def __init__(self, directories):
         super().__init__()
@@ -29,53 +29,53 @@ class FileScanner(QThread):
         self._mutex = QMutex()
     
     def cancel(self):
-        """Cancelar el escaneo"""
+        """Cancel scanning"""
         with QMutexLocker(self._mutex):
             self._is_cancelled = True
     
     def run(self):
-        """Escanear directorios de forma recursiva"""
+        """Scan directories recursively"""
         total_files = 0
         processed = 0
         
-        # Primera pasada: contar archivos (opcional, para la barra de progreso)
-        # Comentada para mayor velocidad en directorios enormes
+        # First pass: count files (optional, for progress bar)
+        # Commented out for faster speed on huge directories
         
-        # Segunda pasada: emitir archivos
+        # Second pass: emit files
         for directory in self.directories:
             path = Path(directory)
             if not path.exists() or not path.is_dir():
                 continue
             
             try:
-                # Usar rglob para búsqueda recursiva
+                # Use rglob for recursive search
                 for file_path in path.rglob("*"):
-                    # Verificar cancelación
+                    # Check cancellation
                     with QMutexLocker(self._mutex):
                         if self._is_cancelled:
                             return
                     
-                    # Solo archivos con extensiones válidas
+                    # Only files with valid extensions
                     if file_path.is_file() and file_path.suffix.lower() in ALL_EXTENSIONS:
                         self.fileFound.emit(str(file_path))
                         total_files += 1
                         processed += 1
                         
-                        # Emitir progreso cada 100 archivos
+                        # Emit progress every 100 files
                         if processed % 100 == 0:
                             self.progress.emit(processed, processed)
                 
             except PermissionError:
-                # Ignorar directorios sin permisos
+                # Ignore directories without permissions
                 continue
         
         self.finished.emit(total_files)
 
 
 class SidebarWidget(QWidget):
-    """Sidebar para seleccionar directorios y mostrar archivos multimedia"""
+    """Sidebar to select directories and display multimedia files"""
     
-    fileSelected = Signal(str)  # Archivo seleccionado
+    fileSelected = Signal(str)  # File selected
     
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -83,25 +83,25 @@ class SidebarWidget(QWidget):
         self._scanner_thread = None
         self._selected_directories = []
         self._all_files = []
-        self._nav_system = None  # Sistema de navegación para votos
+        self._nav_system = None  # Navigation system for votes
         
         self._setup_ui()
         
     def _setup_ui(self):
-        """Configurar interfaz"""
+        """Setup interface"""
         layout = QVBoxLayout(self)
         layout.setContentsMargins(5, 5, 5, 5)
         layout.setSpacing(5)
         
-        # --- Botones de directorios ---
+        # --- Directory buttons ---
         btn_layout = QHBoxLayout()
         
-        self.add_dir_btn = QPushButton("📁 Añadir")
-        self.add_dir_btn.setToolTip("Añadir directorio(s)")
+        self.add_dir_btn = QPushButton("Add")
+        self.add_dir_btn.setToolTip("Add directory(s)")
         self.add_dir_btn.clicked.connect(self._add_directories)
         
-        self.clear_btn = QPushButton("🗑️ Limpiar")
-        self.clear_btn.setToolTip("Limpiar lista")
+        self.clear_btn = QPushButton("Clear")
+        self.clear_btn.setToolTip("Clear list")
         self.clear_btn.clicked.connect(self._clear_all)
         
         btn_layout.addWidget(self.add_dir_btn)
@@ -109,16 +109,16 @@ class SidebarWidget(QWidget):
         layout.addLayout(btn_layout)
         
         # --- Info label ---
-        self.info_label = QLabel("Sin archivos")
+        self.info_label = QLabel("No files")
         self.info_label.setStyleSheet("color: gray; font-size: 11px;")
         layout.addWidget(self.info_label)
         
-        # --- Barra de progreso ---
+        # --- Progress bar ---
         self.progress_bar = QProgressBar()
         self.progress_bar.hide()
         layout.addWidget(self.progress_bar)
         
-        # --- Lista de archivos ---
+        # --- File list ---
         self.file_list = QListWidget()
         self.file_list.setAlternatingRowColors(True)
         self.file_list.itemClicked.connect(self._on_item_clicked)
@@ -126,22 +126,22 @@ class SidebarWidget(QWidget):
         self.file_list.customContextMenuRequested.connect(self._show_context_menu)
         layout.addWidget(self.file_list)
         
-        # Configurar tamaño
+        # Configure size
         self.setMinimumWidth(250)
         
     # ========================================
-    # Gestión de directorios
+    # Directory management
     # ========================================
     
     def _add_directories(self):
-        """Añadir uno o varios directorios"""
+        """Add one or more directories"""
         dialog = QFileDialog(self)
         dialog.setFileMode(QFileDialog.Directory)
         dialog.setOption(QFileDialog.ShowDirsOnly, True)
-        # Permitir selección múltiple
+        # Allow multiple selection
         dialog.setOption(QFileDialog.DontUseNativeDialog, True)
         
-        # Hack para permitir selección múltiple de directorios
+        # Hack to allow multiple directory selection
         file_view = dialog.findChild(QListWidget)
         if file_view:
             file_view.setSelectionMode(QListWidget.MultiSelection)
@@ -153,18 +153,18 @@ class SidebarWidget(QWidget):
                 self._scan_directories(directories)
     
     def _scan_directories(self, directories):
-        """Escanear directorios en segundo plano"""
-        # Cancelar escaneo anterior si existe
+        """Scan directories in background"""
+        # Cancel previous scan if exists
         if self._scanner_thread and self._scanner_thread.isRunning():
             self._scanner_thread.cancel()
             self._scanner_thread.wait()
         
-        # Mostrar progreso
+        # Show progress
         self.progress_bar.show()
-        self.progress_bar.setRange(0, 0)  # Modo indeterminado
-        self.info_label.setText("Escaneando...")
+        self.progress_bar.setRange(0, 0)  # Indeterminate mode
+        self.info_label.setText("Scanning...")
         
-        # Crear y configurar thread
+        # Create and configure thread
         self._scanner_thread = FileScanner(directories)
         self._scanner_thread.fileFound.connect(self._add_file_to_list)
         self._scanner_thread.progress.connect(self._update_progress)
@@ -172,49 +172,50 @@ class SidebarWidget(QWidget):
         self._scanner_thread.start()
     
     def _add_file_to_list(self, file_path):
-        """Añadir archivo a la lista (llamado por el thread)"""
+        """Add file to list (called by thread)"""
         self._all_files.append(file_path)
         
-        # Añadir a la UI
+        # Add to UI
         path = Path(file_path)
         
         item = QListWidgetItem(path.name)
         item.setData(Qt.UserRole, file_path)
         
-        # Aplicar color de fondo si hay sistema de navegación
+        # Apply background color if navigation system exists
         if self._nav_system:
             vote = self._nav_system.get_vote(file_path)
-            if vote == 1:  # Positivo
-                item.setBackground(QColor(76, 175, 80, 100))  # Verde claro
-            elif vote == -1:  # Negativo
-                item.setBackground(QColor(244, 67, 54, 100))  # Rojo claro
+            if vote == 1:  # Positive
+                item.setBackground(QColor(76, 175, 80, 100))  # Light green
+            elif vote == -1:  # Negative
+                item.setBackground(QColor(244, 67, 54, 100))  # Light red
         
         self.file_list.addItem(item)
         
-        # Actualizar contador
-        self.info_label.setText(f"{len(self._all_files)} archivos")
+        # Update counter
+        self.info_label.setText(f"{len(self._all_files)} files")
     
     def _update_progress(self, current, total):
-        """Actualizar barra de progreso"""
+        """Update progress bar"""
         if total > 0:
             self.progress_bar.setRange(0, total)
             self.progress_bar.setValue(current)
     
     def _scan_finished(self, total):
-        """Escaneo completado"""
+        """Scan completed"""
         self.progress_bar.hide()
-        self.info_label.setText(f"{total} archivos encontrados")
+        self.info_label.setText(f"{total} files found")
         
         if total == 0:
-            self.info_label.setText("No se encontraron archivos multimedia")
+            self.info_label.setText("No multimedia files found")
         
-        # REFRESCAR VOTOS SI HAY SISTEMA DE NAVEGACIÓN
+        # Update navigation system with new file list
         if self._nav_system:
+            self._nav_system.update_file_list(self._all_files)
             self.refresh_votes()
     
     def _clear_all(self):
-        """Limpiar lista y directorios"""
-        # Cancelar escaneo si está en curso
+        """Clear list and directories"""
+        # Cancel scan if in progress
         if self._scanner_thread and self._scanner_thread.isRunning():
             self._scanner_thread.cancel()
             self._scanner_thread.wait()
@@ -222,41 +223,46 @@ class SidebarWidget(QWidget):
         self._selected_directories.clear()
         self._all_files.clear()
         self.file_list.clear()
-        self.info_label.setText("Sin archivos")
+        self.info_label.setText("No files")
         self.progress_bar.hide()
+        
+        # Update navigation system with empty list
+        if self._nav_system:
+            self._nav_system.update_file_list([])
+            self._nav_system.reset_history()
     
     # ========================================
-    # Selección de archivos
+    # File selection
     # ========================================
     
     def _on_item_clicked(self, item):
-        """Archivo seleccionado en la lista"""
+        """File selected in list"""
         file_path = item.data(Qt.UserRole)
         if file_path:
             self.fileSelected.emit(file_path)
     
     def _show_context_menu(self, position):
-        """Menú contextual en la lista"""
+        """Context menu in list"""
         item = self.file_list.itemAt(position)
         if not item:
             return
         
         menu = QMenu(self)
         
-        # Acción: Abrir en explorador
-        open_action = QAction("Abrir ubicación", self)
+        # Action: Open in file manager
+        open_action = QAction("Open location", self)
         open_action.triggered.connect(lambda: self._open_file_location(item))
         menu.addAction(open_action)
         
-        # Acción: Copiar ruta
-        copy_action = QAction("Copiar ruta", self)
+        # Action: Copy path
+        copy_action = QAction("Copy path", self)
         copy_action.triggered.connect(lambda: self._copy_path(item))
         menu.addAction(copy_action)
         
         menu.exec(self.file_list.mapToGlobal(position))
     
     def _open_file_location(self, item):
-        """Abrir ubicación del archivo en el explorador"""
+        """Open file location in file manager"""
         from PySide6.QtGui import QDesktopServices
         from PySide6.QtCore import QUrl
         
@@ -264,23 +270,23 @@ class SidebarWidget(QWidget):
         QDesktopServices.openUrl(QUrl.fromLocalFile(str(file_path.parent)))
     
     def _copy_path(self, item):
-        """Copiar ruta al portapapeles"""
+        """Copy path to clipboard"""
         from PySide6.QtWidgets import QApplication
         
         file_path = item.data(Qt.UserRole)
         QApplication.clipboard().setText(file_path)
     
     # ========================================
-    # Sistema de votación
+    # Voting system
     # ========================================
     
     def set_navigation_system(self, nav_system):
-        """Establecer sistema de navegación para mostrar votos"""
+        """Set navigation system to display votes"""
         self._nav_system = nav_system
         self.refresh_votes()
     
     def refresh_votes(self):
-        """Refrescar colores de votos en la lista"""
+        """Refresh vote colors in list"""
         if not self._nav_system:
             return
         
@@ -291,28 +297,28 @@ class SidebarWidget(QWidget):
             if file_path:
                 vote = self._nav_system.get_vote(file_path)
                 
-                # Aplicar color de fondo según voto
-                if vote == 1:  # Positivo
-                    item.setBackground(QColor(76, 175, 80, 100))  # Verde claro
-                elif vote == -1:  # Negativo
-                    item.setBackground(QColor(244, 67, 54, 100))  # Rojo claro
+                # Apply background color based on vote
+                if vote == 1:  # Positive
+                    item.setBackground(QColor(76, 175, 80, 100))  # Light green
+                elif vote == -1:  # Negative
+                    item.setBackground(QColor(244, 67, 54, 100))  # Light red
                 else:  # Neutral
-                    item.setBackground(QColor(0, 0, 0, 0))  # Transparente
+                    item.setBackground(QColor(0, 0, 0, 0))  # Transparent
     
     # ========================================
-    # API pública
+    # Public API
     # ========================================
     
     def get_all_files(self):
-        """Obtener lista completa de archivos"""
+        """Get complete list of files"""
         return self._all_files.copy()
     
     def get_current_index(self):
-        """Obtener índice del archivo actual"""
+        """Get current file index"""
         return self.file_list.currentRow()
     
     def select_next(self):
-        """Seleccionar siguiente archivo"""
+        """Select next file"""
         current = self.file_list.currentRow()
         if current < self.file_list.count() - 1:
             self.file_list.setCurrentRow(current + 1)
@@ -321,7 +327,7 @@ class SidebarWidget(QWidget):
                 self.fileSelected.emit(item.data(Qt.UserRole))
     
     def select_previous(self):
-        """Seleccionar archivo anterior"""
+        """Select previous file"""
         current = self.file_list.currentRow()
         if current > 0:
             self.file_list.setCurrentRow(current - 1)
@@ -330,7 +336,7 @@ class SidebarWidget(QWidget):
                 self.fileSelected.emit(item.data(Qt.UserRole))
     
     def cleanup(self):
-        """Limpiar recursos"""
+        """Clean up resources"""
         if self._scanner_thread and self._scanner_thread.isRunning():
             self._scanner_thread.cancel()
             self._scanner_thread.wait()

@@ -5,124 +5,130 @@ from collections import deque
 
 class NavigationSystem:
     """
-    Sistema de navegación con votos y cooldowns configurables
+    Navigation system with votes and configurable cooldowns
     
-    Votos: +1 (positivo), 0 (neutral), -1 (negativo)
-    Cooldowns: Configuración global por categoría de voto
+    Votes: +1 (positive), 0 (neutral), -1 (negative)
+    Cooldowns: Global configuration per vote category
     """
     
     def __init__(
         self, 
         file_list: List[str],
-        positive_cooldown: int = 5,   # Cooldown para archivos con voto positivo
-        neutral_cooldown: int = 20,   # Cooldown para archivos sin voto
-        negative_cooldown: int = 0,   # Cooldown para archivos con voto negativo (0 = bloqueados)
+        positive_cooldown: int = 5,   # Cooldown for positively voted files
+        neutral_cooldown: int = 20,   # Cooldown for files without vote
+        negative_cooldown: int = 0,   # Cooldown for negatively voted files (0 = blocked)
         max_history: int = 1000
     ):
         """
         Args:
-            file_list: Lista de archivos
-            positive_cooldown: Archivos antes de repetir los votados positivamente
-            neutral_cooldown: Archivos antes de repetir los sin voto
-            negative_cooldown: Archivos antes de repetir los negativos (0 = nunca)
-            max_history: Máximo de archivos en historial
+            file_list: List of files
+            positive_cooldown: Files before repeating positively voted ones
+            neutral_cooldown: Files before repeating unvoted ones
+            negative_cooldown: Files before repeating negative ones (0 = never)
+            max_history: Maximum files in history
         """
         self.all_files = file_list.copy()
         self.max_history = max_history
         
-        # Configuración de cooldowns por categoría
+        # Cooldown configuration per category
         self.positive_cooldown = positive_cooldown
         self.neutral_cooldown = neutral_cooldown
         self.negative_cooldown = negative_cooldown
         
-        # Votos: {file_path: vote}
-        # vote: 1 (positivo), 0 (neutral - sin voto), -1 (negativo)
+        # Votes: {file_path: vote}
+        # vote: 1 (positive), 0 (neutral - no vote), -1 (negative)
         self.votes: Dict[str, int] = {}
         
-        # Historial de navegación
+        # Navigation history
         self.history: List[str] = []
         self.history_position = -1
         
-        # Caches de archivos recientes por categoría
+        # Caches of recent files per category
         self.recent_positive = deque(maxlen=positive_cooldown)
         self.recent_neutral = deque(maxlen=neutral_cooldown)
         self.recent_negative = deque(maxlen=negative_cooldown if negative_cooldown > 0 else 1)
     
     # ========================================
-    # Votos
+    # Votes
     # ========================================
     
     def vote_positive(self, file_path: str):
-        """Votar positivo (👍)"""
+        """Vote positive (👍)"""
         self.votes[file_path] = 1
     
     def vote_negative(self, file_path: str):
-        """Votar negativo (👎)"""
+        """Vote negative (👎)"""
         self.votes[file_path] = -1
     
     def clear_vote(self, file_path: str):
-        """Quitar voto (vuelve a neutral ⚪)"""
+        """Remove vote (returns to neutral ⚪)"""
         if file_path in self.votes:
             del self.votes[file_path]
     
     def get_vote(self, file_path: str) -> int:
-        """Obtener voto: 1, 0, o -1"""
+        """Get vote: 1, 0, or -1"""
         return self.votes.get(file_path, 0)
     
     def toggle_vote(self, file_path: str, vote_type: int):
         """
-        Toggle de voto
+        Toggle vote
         
         Args:
-            vote_type: 1 (positivo) o -1 (negativo)
+            vote_type: 1 (positive) or -1 (negative)
         """
         current = self.get_vote(file_path)
         if current == vote_type:
-            self.clear_vote(file_path)  # Si ya tiene ese voto, quitarlo
+            self.clear_vote(file_path)  # If already has that vote, remove it
         else:
             self.votes[file_path] = vote_type
     
     def get_vote_symbol(self, file_path: str) -> str:
-        """Obtener símbolo del voto"""
+        """Get vote symbol"""
         vote = self.get_vote(file_path)
         return "👍" if vote == 1 else "👎" if vote == -1 else "⚪"
     
     # ========================================
-    # Configuración de Cooldowns
+    # Cooldown Configuration
     # ========================================
     
     def set_positive_cooldown(self, cooldown: int):
-        """Configurar cooldown para positivos"""
-        self.positive_cooldown = max(0, cooldown)
-        self._resize_deque(self.recent_positive, self.positive_cooldown)
+        """Configure cooldown for positives"""
+        self.positive_cooldown = max(1, cooldown)
+        # Create new deque with new maxlen and preserve items
+        items = list(self.recent_positive)
+        self.recent_positive = deque(items[-self.positive_cooldown:], maxlen=self.positive_cooldown)
     
     def set_neutral_cooldown(self, cooldown: int):
-        """Configurar cooldown para neutrales"""
-        self.neutral_cooldown = max(0, cooldown)
-        self._resize_deque(self.recent_neutral, self.neutral_cooldown)
+        """Configure cooldown for neutrals"""
+        self.neutral_cooldown = max(1, cooldown)
+        # Create new deque with new maxlen and preserve items
+        items = list(self.recent_neutral)
+        self.recent_neutral = deque(items[-self.neutral_cooldown:], maxlen=self.neutral_cooldown)
     
     def set_negative_cooldown(self, cooldown: int):
         """
-        Configurar cooldown para negativos
-        0 = bloqueados permanentemente
-        >0 = se repiten después de N archivos
+        Configure cooldown for negatives
+        0 = permanently blocked
+        >0 = repeat after N files
         """
         self.negative_cooldown = max(0, cooldown)
         maxlen = self.negative_cooldown if self.negative_cooldown > 0 else 1
-        self._resize_deque(self.recent_negative, maxlen)
+        # Create new deque with new maxlen and preserve items
+        items = list(self.recent_negative)
+        self.recent_negative = deque(items[-maxlen:], maxlen=maxlen)
 
     def set_max_history(self, max_history: int):
-        """Cambiar límite máximo de historial"""
-        self.max_history = max(100, max_history)  # Mínimo 100
+        """Change maximum history limit"""
+        self.max_history = max(100, max_history)  # Minimum 100
         
-        # Si el historial actual excede el nuevo límite, truncar
+        # If current history exceeds new limit, truncate
         if len(self.history) > self.max_history:
             overflow = len(self.history) - self.max_history
             self.history = self.history[overflow:]
             self.history_position = max(0, self.history_position - overflow)
     
     def get_cooldown_for_file(self, file_path: str) -> int:
-        """Obtener cooldown efectivo para un archivo"""
+        """Get effective cooldown for a file"""
         vote = self.get_vote(file_path)
         if vote == 1:
             return self.positive_cooldown
@@ -131,58 +137,49 @@ class NavigationSystem:
         else:
             return self.neutral_cooldown
     
-    def _resize_deque(self, dq: deque, new_size: int):
-        """Redimensionar deque preservando elementos"""
-        if new_size <= 0:
-            new_size = 1
-        items = list(dq)
-        dq.clear()
-        dq.maxlen = new_size
-        dq.extend(items[-new_size:] if len(items) > new_size else items)
-    
     # ========================================
-    # Navegación
+    # Navigation
     # ========================================
     
     def get_current(self) -> Optional[str]:
-        """Obtener archivo actual"""
+        """Get current file"""
         if 0 <= self.history_position < len(self.history):
             return self.history[self.history_position]
         return None
     
     def can_go_back(self) -> bool:
-        """¿Se puede volver atrás?"""
+        """Can go back?"""
         return self.history_position > 0
     
     def can_go_forward_in_history(self) -> bool:
-        """¿Se puede avanzar en el historial?"""
+        """Can go forward in history?"""
         return self.history_position < len(self.history) - 1
     
     def go_back(self) -> Optional[str]:
-        """Volver al archivo anterior"""
+        """Go back to previous file"""
         if self.can_go_back():
             self.history_position -= 1
             return self.get_current()
         return None
     
     def go_forward_in_history(self) -> Optional[str]:
-        """Avanzar en el historial"""
+        """Go forward in history"""
         if self.can_go_forward_in_history():
             self.history_position += 1
             return self.get_current()
         return None
     
     def next_random(self) -> Optional[str]:
-        """Obtener siguiente archivo (historial o aleatorio)"""
-        # Si hay futuro en el historial, avanzar por ahí
+        """Get next file (history or random)"""
+        # If there's future in history, advance through it
         if self.can_go_forward_in_history():
             return self.go_forward_in_history()
         
-        # Si no hay futuro, generar aleatorio
+        # If no future, generate random
         candidates = self._get_eligible_files()
         
         if not candidates:
-            # Resetear caches y reintentar
+            # Reset caches and retry
             self.recent_positive.clear()
             self.recent_neutral.clear()
             self.recent_negative.clear()
@@ -191,20 +188,20 @@ class NavigationSystem:
             if not candidates:
                 return None
         
-        # Selección aleatoria
+        # Random selection
         next_file = random.choice(candidates)
         
-        # Como estamos al final del historial, añadir normalmente
+        # Since we're at the end of history, add normally
         self.history.append(next_file)
         self.history_position = len(self.history) - 1
         
-        # Limitar tamaño del historial
+        # Limit history size
         if len(self.history) > self.max_history:
             overflow = len(self.history) - self.max_history
             self.history = self.history[overflow:]
             self.history_position -= overflow
         
-        # Añadir a cache correspondiente
+        # Add to corresponding cache
         vote = self.get_vote(next_file)
         if vote == 1 and self.positive_cooldown > 0:
             self.recent_positive.append(next_file)
@@ -216,54 +213,54 @@ class NavigationSystem:
         return next_file
     
     def _get_eligible_files(self) -> List[str]:
-        """Obtener archivos que pueden mostrarse"""
+        """Get files that can be shown"""
         eligible = []
         
         for file_path in self.all_files:
             vote = self.get_vote(file_path)
             
-            # Negativos
+            # Negatives
             if vote == -1:
                 if self.negative_cooldown == 0:
-                    continue  # Bloqueados permanentemente
+                    continue  # Permanently blocked
                 if file_path in self.recent_negative:
-                    continue  # En cooldown
+                    continue  # In cooldown
             
-            # Positivos
+            # Positives
             elif vote == 1:
                 if self.positive_cooldown > 0 and file_path in self.recent_positive:
-                    continue  # En cooldown
+                    continue  # In cooldown
             
-            # Neutrales
+            # Neutrals
             else:
                 if self.neutral_cooldown > 0 and file_path in self.recent_neutral:
-                    continue  # En cooldown
+                    continue  # In cooldown
             
             eligible.append(file_path)
         
         return eligible
     
     # ========================================
-    # Gestión
+    # Management
     # ========================================
     
     def update_file_list(self, new_file_list: List[str]):
-        """Actualizar lista de archivos"""
+        """Update file list"""
         self.all_files = new_file_list.copy()
     
     # ========================================
-    # Estadísticas
+    # Statistics
     # ========================================
     
     def get_stats(self) -> Dict:
-        """Obtener estadísticas"""
+        """Get statistics"""
         positive = sum(1 for v in self.votes.values() if v == 1)
         negative = sum(1 for v in self.votes.values() if v == -1)
         neutral = len(self.all_files) - positive - negative
         
         eligible = len(self._get_eligible_files())
         
-        # Contadores en cooldown
+        # Counters in cooldown
         in_cooldown_pos = len([f for f in self.all_files if self.get_vote(f) == 1 and f in self.recent_positive])
         in_cooldown_neg = len([f for f in self.all_files if self.get_vote(f) == -1 and f in self.recent_negative])
         in_cooldown_neu = len([f for f in self.all_files if self.get_vote(f) == 0 and f in self.recent_neutral])
@@ -287,7 +284,7 @@ class NavigationSystem:
         }
     
     def get_file_info(self, file_path: str) -> Dict:
-        """Información de un archivo"""
+        """File information"""
         vote = self.get_vote(file_path)
         cooldown = self.get_cooldown_for_file(file_path)
         
@@ -309,11 +306,11 @@ class NavigationSystem:
         }
     
     # ========================================
-    # Persistencia
+    # Persistence
     # ========================================
     
     def export_data(self) -> Dict:
-        """Exportar votos y configuración"""
+        """Export votes and configuration"""
         return {
             'votes': self.votes.copy(),
             'positive_cooldown': self.positive_cooldown,
@@ -323,7 +320,7 @@ class NavigationSystem:
         }
     
     def import_data(self, data: Dict):
-        """Importar datos guardados"""
+        """Import saved data"""
         if 'votes' in data:
             self.votes = data['votes'].copy()
         if 'positive_cooldown' in data:
@@ -336,7 +333,7 @@ class NavigationSystem:
             self.set_max_history(data['max_history'])
     
     def reset_history(self):
-        """Limpiar historial"""
+        """Clear history"""
         self.history.clear()
         self.history_position = -1
         self.recent_positive.clear()
@@ -344,20 +341,21 @@ class NavigationSystem:
         self.recent_negative.clear()
     
     def reset_votes(self):
-        """Limpiar votos"""
+        """Clear votes"""
         self.votes.clear()
     
     def reset_all(self):
-        """Reset completo"""
+        """Complete reset"""
         self.reset_history()
         self.reset_votes()
+    
     def reset_positive_votes(self):
         """Reset only positive votes to neutral"""
         votes_to_remove = [path for path, vote in self.votes.items() if vote == 1]
         for path in votes_to_remove:
             del self.votes[path]
         
-        # Limpiar cache de positivos
+        # Clear positive cache
         self.recent_positive.clear()
 
     def reset_negative_votes(self):
@@ -366,72 +364,72 @@ class NavigationSystem:
         for path in votes_to_remove:
             del self.votes[path]
         
-        # Limpiar cache de negativos
+        # Clear negative cache
         self.recent_negative.clear()
 
     def reset_neutral_votes(self):
         """Remove all neutral votes (keep only voted files)"""
-        # Los neutrales no están en self.votes, así que no hay nada que hacer
+        # Neutrals aren't in self.votes, so nothing to do
         self.recent_neutral.clear()
 
 
 # ========================================
-# Ejemplo de uso
+# Usage Example
 # ========================================
 
 if __name__ == "__main__":
-    # Crear sistema con configuración
+    # Create system with configuration
     files = [f"file_{i:03d}.jpg" for i in range(30)]
     nav = NavigationSystem(
         files,
-        positive_cooldown=3,   # Positivos se repiten después de 3 archivos
-        neutral_cooldown=15,   # Neutrales después de 15
-        negative_cooldown=0    # Negativos bloqueados (0 = nunca)
+        positive_cooldown=3,   # Positives repeat after 3 files
+        neutral_cooldown=15,   # Neutrals after 15
+        negative_cooldown=0    # Negatives blocked (0 = never)
     )
     
-    print("=== Sistema de Navegación con Votos ===")
-    print(f"Configuración:")
-    print(f"  👍 Positivos: cooldown = {nav.positive_cooldown}")
-    print(f"  ⚪ Neutrales: cooldown = {nav.neutral_cooldown}")
-    print(f"  👎 Negativos: cooldown = {nav.negative_cooldown} (0 = bloqueados)\n")
+    print("=== Navigation System with Votes ===")
+    print(f"Configuration:")
+    print(f"  👍 Positives: cooldown = {nav.positive_cooldown}")
+    print(f"  ⚪ Neutrals: cooldown = {nav.neutral_cooldown}")
+    print(f"  👎 Negatives: cooldown = {nav.negative_cooldown} (0 = blocked)\n")
     
-    # Navegar y votar
+    # Navigate and vote
     for i in range(25):
         file = nav.next_random()
         if not file:
-            print("No hay archivos disponibles")
+            print("No files available")
             break
         
         symbol = nav.get_vote_symbol(file)
         print(f"{i+1:2d}. {symbol} {file}")
         
-        # Simular votos
+        # Simulate votes
         if i < 12:
             choice = random.random()
             if choice < 0.3:
                 nav.vote_positive(file)
-                print(f"    → Votado 👍")
+                print(f"    → Voted 👍")
             elif choice < 0.4:
                 nav.vote_negative(file)
-                print(f"    → Votado 👎 (bloqueado)")
+                print(f"    → Voted 👎 (blocked)")
     
-    # Estadísticas
+    # Statistics
     print("\n" + "="*60)
-    print("ESTADÍSTICAS:")
+    print("STATISTICS:")
     stats = nav.get_stats()
-    print(f"  Total archivos: {stats['total_files']}")
-    print(f"  👍 Positivos: {stats['positive_voted']}")
-    print(f"  ⚪ Neutrales: {stats['neutral_voted']}")
-    print(f"  👎 Negativos: {stats['negative_voted']}")
-    print(f"  Disponibles ahora: {stats['eligible_now']}")
-    print(f"\n  En cooldown:")
+    print(f"  Total files: {stats['total_files']}")
+    print(f"  👍 Positives: {stats['positive_voted']}")
+    print(f"  ⚪ Neutrals: {stats['neutral_voted']}")
+    print(f"  👎 Negatives: {stats['negative_voted']}")
+    print(f"  Available now: {stats['eligible_now']}")
+    print(f"\n  In cooldown:")
     print(f"    👍 {stats['in_cooldown']['positive']}")
     print(f"    ⚪ {stats['in_cooldown']['neutral']}")
     print(f"    👎 {stats['in_cooldown']['negative']}")
     
-    # Cambiar configuración en tiempo real
+    # Change configuration in real time
     print("\n" + "="*60)
-    print("CAMBIO DE CONFIGURACIÓN:")
-    print("  Permitiendo negativos con cooldown de 30...")
+    print("CONFIGURATION CHANGE:")
+    print("  Allowing negatives with cooldown of 30...")
     nav.set_negative_cooldown(30)
-    print(f"  Nuevos archivos disponibles: {nav.get_stats()['eligible_now']}")
+    print(f"  New available files: {nav.get_stats()['eligible_now']}")

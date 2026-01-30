@@ -15,7 +15,7 @@ VIDEO_EXTENSIONS = {".mp4", ".mkv", ".avi", ".webm", ".mov"}
 
 
 class ImagePreloader(QThread):
-    """Thread para pre-cargar imágenes en segundo plano"""
+    """Thread for pre-loading images in the background"""
     imageLoaded = Signal(str, QPixmap)  # (path, pixmap)
     
     def __init__(self):
@@ -24,20 +24,20 @@ class ImagePreloader(QThread):
         self.should_stop = False
     
     def load_image(self, path: str):
-        """Solicitar carga de imagen"""
+        """Request image loading"""
         self.path_to_load = path
         if not self.isRunning():
             self.start()
     
     def run(self):
-        """Cargar imagen en segundo plano"""
+        """Load image in background"""
         if not self.path_to_load:
             return
         
         path = self.path_to_load
         self.path_to_load = None
         
-        # Leer imagen
+        # Read image
         reader = QImageReader(path)
         if not reader.canRead():
             return
@@ -45,7 +45,7 @@ class ImagePreloader(QThread):
         original_size = reader.size()
         max_dimension = 7680
         
-        # Escalar si es necesario
+        # Scale if necessary
         if original_size.width() > max_dimension or original_size.height() > max_dimension:
             if original_size.width() > original_size.height():
                 scale_factor = max_dimension / original_size.width()
@@ -64,15 +64,15 @@ class ImagePreloader(QThread):
             self.imageLoaded.emit(path, pixmap)
     
     def stop(self):
-        """Detener thread"""
+        """Stop thread"""
         self.should_stop = True
         self.wait()
 
 class ViewerContainer(QWidget):
-    # Señales
+    # Signals
     voteChanged = Signal(str, int)  # (file_path, vote: 1/-1/0)
-    requestNext = Signal()  # Solicitar siguiente archivo aleatorio
-    requestPrevious = Signal()  # Solicitar archivo anterior
+    requestNext = Signal()  # Request next random file
+    requestPrevious = Signal()  # Request previous file
     
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -83,7 +83,7 @@ class ViewerContainer(QWidget):
         self._video_widget = None
         self._current_file = None
 
-        self._preloaded_cache = {}  # Caché: {path: pixmap}
+        self._preloaded_cache = {}  # Cache: {path: pixmap}
         self._preloader = ImagePreloader()
         self._preloader.imageLoaded.connect(self._on_image_preloaded)
 
@@ -136,13 +136,13 @@ class ViewerContainer(QWidget):
     def _create_voting_controls(self):
         """Create voting status indicator"""
         self.voting_controls = QWidget()
-        self.voting_controls.setMaximumHeight(25)  # Contenedor muy pequeño
+        self.voting_controls.setMaximumHeight(25)  # Very small container
         voting_layout = QHBoxLayout(self.voting_controls)
-        voting_layout.setContentsMargins(3, 1, 3, 1)  # Márgenes mínimos
+        voting_layout.setContentsMargins(3, 1, 3, 1)  # Minimal margins
         
-        self.vote_status_label = QLabel("⚪")
+        self.vote_status_label = QLabel("")
         self.vote_status_label.setAlignment(Qt.AlignCenter)
-        self.vote_status_label.setFixedHeight(20)  # Altura fija pequeña
+        self.vote_status_label.setFixedHeight(20)  # Small fixed height
         self.vote_status_label.setStyleSheet("""
             QLabel {
                 background-color: rgba(43, 43, 43, 180);
@@ -166,25 +166,25 @@ class ViewerContainer(QWidget):
         
         current = self.get_current_vote()
         
-        # Si es upvote (flecha arriba) - Solo avanza hacia positivo
+        # If upvote (up arrow) - Only moves towards positive
         if vote_type == 1:
-            if current == -1:  # Negativo → Neutral
+            if current == -1:  # Negative → Neutral
                 new_vote = 0
-            elif current == 0:  # Neutral → Positivo
+            elif current == 0:  # Neutral → Positive
                 new_vote = 1
-            else:  # Ya es positivo, no hacer nada
+            else:  # Already positive, do nothing
                 return
             
             self.voteChanged.emit(self._current_file, new_vote)
             self._update_vote_display(new_vote)
         
-        # Si es downvote (flecha abajo) - Solo avanza hacia negativo
+        # If downvote (down arrow) - Only moves towards negative
         elif vote_type == -1:
-            if current == 1:  # Positivo → Neutral
+            if current == 1:  # Positive → Neutral
                 new_vote = 0
-            elif current == 0:  # Neutral → Negativo
+            elif current == 0:  # Neutral → Negative
                 new_vote = -1
-            else:  # Ya es negativo, no hacer nada
+            else:  # Already negative, do nothing
                 return
             
             self.voteChanged.emit(self._current_file, new_vote)
@@ -193,9 +193,9 @@ class ViewerContainer(QWidget):
     def get_current_vote(self):
         """Get current vote from display"""
         text = self.vote_status_label.text()
-        if "👍" in text:
+        if "✓" in text or "Like" in text:
             return 1
-        elif "👎" in text:
+        elif "✗" in text or "Dislike" in text:
             return -1
         else:
             return 0
@@ -203,7 +203,7 @@ class ViewerContainer(QWidget):
     def _update_vote_display(self, current_vote: int):
         """Update vote status display"""
         if current_vote == 1:
-            self.vote_status_label.setText("👍")
+            self.vote_status_label.setText("✓")
             self.vote_status_label.setStyleSheet("""
                 QLabel {
                     background-color: rgba(76, 175, 80, 180);
@@ -214,7 +214,7 @@ class ViewerContainer(QWidget):
                 }
             """)
         elif current_vote == -1:
-            self.vote_status_label.setText("👎")
+            self.vote_status_label.setText("✗")
             self.vote_status_label.setStyleSheet("""
                 QLabel {
                     background-color: rgba(244, 67, 54, 180);
@@ -225,7 +225,7 @@ class ViewerContainer(QWidget):
                 }
             """)
         else:
-            self.vote_status_label.setText("⚪")
+            self.vote_status_label.setText("-")
             self.vote_status_label.setStyleSheet("""
                 QLabel {
                     background-color: rgba(43, 43, 43, 180);
@@ -241,29 +241,29 @@ class ViewerContainer(QWidget):
         self._update_vote_display(vote)
 
     def _on_image_preloaded(self, path: str, pixmap: QPixmap):
-        """Imagen pre-cargada en caché"""
+        """Image pre-loaded in cache"""
         self._preloaded_cache[path] = pixmap
-        # Mantener solo 3 imágenes en caché
+        # Keep only 3 images in cache
         if len(self._preloaded_cache) > 3:
-            # Eliminar la más antigua (primera)
+            # Remove oldest (first)
             first_key = next(iter(self._preloaded_cache))
             del self._preloaded_cache[first_key]
 
     def preload_next(self, next_path: str):
-        """Pre-cargar siguiente imagen en segundo plano"""
+        """Pre-load next image in background"""
         if not next_path:
             return
         
-        # Solo pre-cargar imágenes
+        # Only pre-load images
         ext = Path(next_path).suffix.lower()
         if ext not in IMAGE_EXTENSIONS:
             return
         
-        # Si ya está en caché, no hacer nada
+        # If already in cache, do nothing
         if next_path in self._preloaded_cache:
             return
         
-        # Solicitar carga en segundo plano
+        # Request background loading
         self._preloader.load_image(next_path)
 
     # =================================================
@@ -381,10 +381,10 @@ class ViewerContainer(QWidget):
         self.player.stop()
         self._destroy_video_widget()
         
-        # Verificar si está en caché
+        # Check if in cache
         if path in self._preloaded_cache:
             pixmap = self._preloaded_cache[path]
-            print(f"✓ Usando imagen pre-cargada: {Path(path).name}")
+            print(f"✓ Using pre-loaded image: {Path(path).name}")
             self._current_pixmap = pixmap
             self._update_image()
             self.stack.setCurrentIndex(0)
@@ -392,11 +392,11 @@ class ViewerContainer(QWidget):
             self.activateWindow()
             return
         
-        # Si no está en caché, cargar normalmente
+        # If not in cache, load normally
         reader = QImageReader(path)
         
         if not reader.canRead():
-            QMessageBox.warning(self, "Error", f"No se puede leer la imagen:\n{path}")
+            QMessageBox.warning(self, "Error", f"Cannot read image:\n{path}")
             return
         
         original_size = reader.size()
@@ -412,13 +412,13 @@ class ViewerContainer(QWidget):
             new_height = int(original_size.height() * scale_factor)
             
             reader.setScaledSize(QSize(new_width, new_height))
-            print(f"Imagen redimensionada de {original_size.width()}x{original_size.height()} a {new_width}x{new_height}")
+            print(f"Image resized from {original_size.width()}x{original_size.height()} to {new_width}x{new_height}")
         
         image = reader.read()
         
         if image.isNull():
             error = reader.errorString()
-            QMessageBox.warning(self, "Error", f"Error al cargar imagen:\n{error}")
+            QMessageBox.warning(self, "Error", f"Error loading image:\n{error}")
             return
         
         pixmap = QPixmap.fromImage(image)
@@ -469,17 +469,17 @@ class ViewerContainer(QWidget):
 
     def keyPressEvent(self, event: QKeyEvent):
         """Handle keyboard shortcuts"""
-        # NAVEGACIÓN (funcionan siempre)
+        # NAVIGATION (always works)
         if event.key() == Qt.Key_Right:
-            # Siguiente archivo
+            # Next file
             self.requestNext.emit()
             event.accept()
         elif event.key() == Qt.Key_Left:
-            # Archivo anterior
+            # Previous file
             self.requestPrevious.emit()
             event.accept()
         
-        # VOTACIÓN (funcionan siempre)
+        # VOTING (always works)
         elif event.key() == Qt.Key_Up:
             # Upvote
             self._vote(1)
@@ -489,7 +489,7 @@ class ViewerContainer(QWidget):
             self._vote(-1)
             event.accept()
         
-        # CONTROLES DE VIDEO (solo cuando hay video)
+        # VIDEO CONTROLS (only when video is playing)
         elif event.key() == Qt.Key_Space and self.stack.currentIndex() == 1:
             self.toggle_play()
             event.accept()
@@ -558,4 +558,4 @@ class ViewerContainer(QWidget):
         self.player.stop()
         self._destroy_video_widget()
         self._preloader.stop()  
-        self._preloaded_cache.clear() 
+        self._preloaded_cache.clear()
