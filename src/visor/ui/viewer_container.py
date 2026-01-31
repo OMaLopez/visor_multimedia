@@ -140,7 +140,7 @@ class ViewerContainer(QWidget):
         voting_layout = QHBoxLayout(self.voting_controls)
         voting_layout.setContentsMargins(3, 1, 3, 1)  # Minimal margins
         
-        self.vote_status_label = QLabel("")
+        self.vote_status_label = QLabel("No vote")
         self.vote_status_label.setAlignment(Qt.AlignCenter)
         self.vote_status_label.setFixedHeight(20)  # Small fixed height
         self.vote_status_label.setStyleSheet("""
@@ -203,7 +203,7 @@ class ViewerContainer(QWidget):
     def _update_vote_display(self, current_vote: int):
         """Update vote status display"""
         if current_vote == 1:
-            self.vote_status_label.setText("✓")
+            self.vote_status_label.setText("✓ Like")
             self.vote_status_label.setStyleSheet("""
                 QLabel {
                     background-color: rgba(76, 175, 80, 180);
@@ -214,7 +214,7 @@ class ViewerContainer(QWidget):
                 }
             """)
         elif current_vote == -1:
-            self.vote_status_label.setText("✗")
+            self.vote_status_label.setText("✗ Dislike")
             self.vote_status_label.setStyleSheet("""
                 QLabel {
                     background-color: rgba(244, 67, 54, 180);
@@ -225,7 +225,7 @@ class ViewerContainer(QWidget):
                 }
             """)
         else:
-            self.vote_status_label.setText("-")
+            self.vote_status_label.setText("No vote")
             self.vote_status_label.setStyleSheet("""
                 QLabel {
                     background-color: rgba(43, 43, 43, 180);
@@ -440,9 +440,26 @@ class ViewerContainer(QWidget):
     def _update_image(self):
         """Update image scaling to fit current widget size"""
         if self._current_pixmap:
+            # Get original image size
+            original_width = self._current_pixmap.width()
+            original_height = self._current_pixmap.height()
+            
+            # Calculate target size maintaining aspect ratio
+            label_size = self.image_label.size()
+            
+            # Limit upscaling to maximum 2x to prevent excessive pixelation
+            max_width = original_width * 2
+            max_height = original_height * 2
+            
+            # Use the smaller of: window size OR 2x original size
+            target_width = min(label_size.width(), max_width)
+            target_height = min(label_size.height(), max_height)
+            
+            target_size = QSize(target_width, target_height)
+            
             self.image_label.setPixmap(
                 self._current_pixmap.scaled(
-                    self.image_label.size(),
+                    target_size,
                     Qt.KeepAspectRatio,
                     Qt.SmoothTransformation,
                 )

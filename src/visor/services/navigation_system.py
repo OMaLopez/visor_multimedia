@@ -93,17 +93,19 @@ class NavigationSystem:
     
     def set_positive_cooldown(self, cooldown: int):
         """Configure cooldown for positives"""
-        self.positive_cooldown = max(1, cooldown)
+        self.positive_cooldown = max(0, cooldown)
         # Create new deque with new maxlen and preserve items
+        maxlen = self.positive_cooldown if self.positive_cooldown > 0 else 1
         items = list(self.recent_positive)
-        self.recent_positive = deque(items[-self.positive_cooldown:], maxlen=self.positive_cooldown)
+        self.recent_positive = deque(items[-maxlen:], maxlen=maxlen)
     
     def set_neutral_cooldown(self, cooldown: int):
         """Configure cooldown for neutrals"""
-        self.neutral_cooldown = max(1, cooldown)
+        self.neutral_cooldown = max(0, cooldown)
         # Create new deque with new maxlen and preserve items
+        maxlen = self.neutral_cooldown if self.neutral_cooldown > 0 else 1
         items = list(self.recent_neutral)
-        self.recent_neutral = deque(items[-self.neutral_cooldown:], maxlen=self.neutral_cooldown)
+        self.recent_neutral = deque(items[-maxlen:], maxlen=maxlen)
     
     def set_negative_cooldown(self, cooldown: int):
         """
@@ -222,18 +224,22 @@ class NavigationSystem:
             # Negatives
             if vote == -1:
                 if self.negative_cooldown == 0:
-                    continue  # Permanently blocked
+                    continue  # Permanently blocked (Never show)
                 if file_path in self.recent_negative:
                     continue  # In cooldown
             
             # Positives
             elif vote == 1:
-                if self.positive_cooldown > 0 and file_path in self.recent_positive:
+                if self.positive_cooldown == 0:
+                    continue  # Never show positives (blocked)
+                if file_path in self.recent_positive:
                     continue  # In cooldown
             
             # Neutrals
             else:
-                if self.neutral_cooldown > 0 and file_path in self.recent_neutral:
+                if self.neutral_cooldown == 0:
+                    continue  # Never show neutrals (blocked)
+                if file_path in self.recent_neutral:
                     continue  # In cooldown
             
             eligible.append(file_path)

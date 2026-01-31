@@ -60,13 +60,23 @@ class MainWindow(QMainWindow):
         
         # Apply loaded configuration
         if self._loaded_settings:
-            if 'positive_cooldown' in self._loaded_settings:
-                self.config_widget.set_config(
-                    self._loaded_settings.get('positive_cooldown', 5),
-                    self._loaded_settings.get('neutral_cooldown', 20),
-                    self._loaded_settings.get('negative_cooldown', 0),
-                    self._loaded_settings.get('max_history', 1000)
-                )
+            pos = self._loaded_settings.get('positive_cooldown', 5)
+            neu = self._loaded_settings.get('neutral_cooldown', 20)
+            neg = self._loaded_settings.get('negative_cooldown', 0)
+            hist = self._loaded_settings.get('max_history', 1000)
+            
+            # Set config without triggering signals during initialization
+            self.config_widget.positive_spin.blockSignals(True)
+            self.config_widget.neutral_spin.blockSignals(True)
+            self.config_widget.negative_spin.blockSignals(True)
+            self.config_widget.history_spin.blockSignals(True)
+            
+            self.config_widget.set_config(pos, neu, neg, hist)
+            
+            self.config_widget.positive_spin.blockSignals(False)
+            self.config_widget.neutral_spin.blockSignals(False)
+            self.config_widget.negative_spin.blockSignals(False)
+            self.config_widget.history_spin.blockSignals(False)
         
         # Viewer
         self.viewer = ViewerContainer()
@@ -228,8 +238,13 @@ class MainWindow(QMainWindow):
             self.nav_system.set_neutral_cooldown(neutral)
             self.nav_system.set_negative_cooldown(negative)
             
+            # Format display text
+            pos_text = "Never" if positive == 0 else str(positive)
+            neu_text = "Never" if neutral == 0 else str(neutral)
+            neg_text = "Never" if negative == 0 else str(negative)
+            
             self.statusBar().showMessage(
-                f"Configuration updated: 👍={positive}, ⚪={neutral}, 👎={negative}",
+                f"Configuration updated: ✓ Like={pos_text}, No vote={neu_text}, ✗ Dislike={neg_text}",
                 3000
             )
         self._save_settings()
@@ -254,7 +269,16 @@ class MainWindow(QMainWindow):
         
         if current:
             file_name = Path(current).name
-            vote_symbol = self.nav_system.get_vote_symbol(current)
+            vote = self.nav_system.get_vote(current)
+            
+            # Use text symbols instead of emojis
+            if vote == 1:
+                vote_symbol = "✓"
+            elif vote == -1:
+                vote_symbol = "✗"
+            else:
+                vote_symbol = "○"
+            
             position = stats['history_position']
             total = stats['history_length']
             eligible = stats['eligible_now']
@@ -263,9 +287,9 @@ class MainWindow(QMainWindow):
                 f"{vote_symbol} {file_name} | "
                 f"Position: {position}/{total} | "
                 f"Available: {eligible}/{stats['total_files']} | "
-                f"👍 {stats['positive_voted']} | "
-                f"⚪ {stats['neutral_voted']} | "
-                f"👎 {stats['negative_voted']}"
+                f"✓ {stats['positive_voted']} | "
+                f"○ {stats['neutral_voted']} | "
+                f"✗ {stats['negative_voted']}"
             )
     
     def _save_settings(self):
@@ -286,7 +310,7 @@ class MainWindow(QMainWindow):
                 # If navigation system exists, export everything
                 data = self.nav_system.export_data()
             else:
-                # If no system, preserve existing votes
+                # If no system, preserve existing votes and save current config
                 pos, neu, neg, hist = self.config_widget.get_config()
                 data = {
                     'votes': existing_data.get('votes', {}),
